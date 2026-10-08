@@ -12,8 +12,6 @@
   <!-- Firebase Compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-functions-compat.js"></script>
 
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700;800;900&display=swap');
@@ -294,13 +292,12 @@
   <div id="v3d" class="hidden" style="position:fixed;inset:0;z-index:900;background:linear-gradient(#38bdf8,#e0f2fe);touch-action:none;user-select:none;-webkit-user-select:none">
     <div id="v3d-mount" style="position:absolute;inset:0"></div>
     <div style="position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:10px;pointer-events:none">
-      <div style="pointer-events:auto;display:flex;gap:6px;flex-wrap:wrap;max-width:calc(100% - 172px)">
+      <div style="pointer-events:auto;display:flex;gap:6px;flex-wrap:wrap;max-width:60%">
         <button id="v3d-exit" class="v3b">⬅ Thoát 3D</button>
         <span id="v3d-info" class="v3p"></span>
       </div>
       
     </div>
-    <canvas id="v3d-mini" style="position:absolute;top:10px;right:10px;width:150px;height:104px;border-radius:12px;border:2px solid rgba(255,255,255,.75);box-shadow:0 6px 16px rgba(0,0,0,.4);pointer-events:none;cursor:default;z-index:3"></canvas>
     <div id="v3d-msg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#0c4a6e;font-weight:900;font-size:18px;pointer-events:none">Đang tải thế giới 3D…</div>
     <div id="v3d-joy" style="position:absolute;left:22px;bottom:26px;width:124px;height:124px;border-radius:50%;background:rgba(15,23,42,.35);border:2px solid rgba(255,255,255,.6);touch-action:none">
       <div id="v3d-knob" style="position:absolute;left:36px;top:36px;width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.9);box-shadow:0 4px 10px rgba(0,0,0,.4)"></div>
@@ -389,7 +386,6 @@
     let session = null;
     let db = null;
     let stateRef = null;
-    let uid = null, fbReady = null, needInit = false;
     let currentFilter = 'all';
 
     // --- WHEEL STATE VARIABLES ---
@@ -426,11 +422,11 @@
         db = firebase.database();
         stateRef = db.ref('games/lang9i/state');
 
-        fbReady = firebase.auth().signInAnonymously().then(c => { uid = c.user.uid; });
-        fbReady.then(() => stateRef.on('value', snap => {
+        stateRef.on('value', snap => {
           const val = snap.val();
           if (val) {
             state = val;
+            if (!state.adminCode) state.adminCode = '2399';
             if (!state.tiles) state.tiles = buildDefaultTiles();
             if (!state.offers || Array.isArray(state.offers)) state.offers = {};
             if (!state.activityFeed) state.activityFeed = [];
@@ -439,7 +435,7 @@
             try { cancelRaceLot(); } catch (e) {}
           } else {
             state = buildDefaultState();
-            needInit = true;
+            stateRef.set(state);
           }
 
           if (session) {
@@ -448,9 +444,6 @@
           }
           renderWheelResults();
           drawWheel(wheelAngle);
-        })).catch(e => {
-          console.error(e);
-          showToast('Không đăng nhập ẩn danh được với Firebase (đã bật Anonymous Auth chưa?)', '#ef4444');
         });
       } catch (e) {
         console.error("Firebase init error:", e);
@@ -470,6 +463,7 @@
 
     function buildDefaultState() {
       return {
+        adminCode: '2399',
         players: {},
         tiles: buildDefaultTiles(),
         offers: {},
@@ -979,59 +973,9 @@
       return `⏱️ ${String(hours).padStart(2, '0')}h:${String(minutes).padStart(2, '0')}m`;
     }
 
-    const GP = 'games/lang9i/';
-    const callAct = d => firebase.app().functions('asia-southeast1').httpsCallable('act')(d).then(r => r.data);
-    const errTxt = (e, m) => (e && e.message && !/^internal$/i.test(e.message)) ? e.message : m;
-    const NAME_RE = /^[\p{L}\p{N}_ -]{2,20}$/u;
-
-    async function hashCode(name, code) {
-      if (!(window.crypto && crypto.subtle)) {
-        showToast('Cần mở game qua https để đăng nhập an toàn!', '#ef4444');
-        throw new Error('no-crypto');
-      }
-      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('lang9i|' + name + '|' + code));
-      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-    window.lang9iHash = hashCode; // dùng 1 lần để tạo mã Admin ban đầu (xem hướng dẫn)
-
-    // Rules của Firebase so khớp hash phía server, client không bao giờ đọc được mã của ai
-    async function claimSession(name, code) {
-      const h = await hashCode(name, code);
-      try { await db.ref(GP + 'sessions/' + uid).set({ name, h }); return true; } catch (e) { return false; }
-    }
-
-    async function loginOrRegister(name, code) {
-      if (await claimSession(name, code)) return 'ok';
-      const h = await hashCode(name, code);
-      const rec = { h };
-      const old = state.players && state.players[name];
-      if (old && old.code !== undefined) { // tài khoản cũ: chuyển mã thô sang hash
-        if (String(old.code) !== code) return 'bad';
-        rec.legacy = String(old.code);
-      }
-      try { await db.ref(GP + 'secrets/players/' + name).set(rec); } catch (e) { return 'bad'; }
-      if (!(await claimSession(name, code))) return 'bad';
-      if (rec.legacy !== undefined) {
-        await db.ref(GP + 'secrets/players/' + name + '/legacy').remove().catch(() => {});
-        await db.ref(GP + 'state/players/' + name + '/code').remove().catch(() => {});
-        return 'ok';
-      }
-      return old ? 'ok' : 'new';
-    }
-
-    async function adminLogin(code) {
-      const h = await hashCode('Admin', code);
-      try { await db.ref(GP + 'admins/' + uid).set(h); } catch (e) { return false; }
-      db.ref(GP + 'state/adminCode').remove().catch(() => {});
-      db.ref(GP + 'secrets/players').once('value').then(s => {
-        Object.keys(s.val() || {}).forEach(n => db.ref(GP + 'state/players/' + n + '/code').remove().catch(() => {}));
-      }).catch(() => {});
-      return true;
-    }
-
-    document.getElementById('login-form').addEventListener('submit', async e => {
+    document.getElementById('login-form').addEventListener('submit', e => {
       e.preventDefault();
-      if (!db || !state || !uid) {
+      if (!db || !state) {
         showToast('Đang kết nối cơ sở dữ liệu, vui lòng đợi...', '#f59e0b');
         return;
       }
@@ -1040,23 +984,24 @@
       const code = document.getElementById('login-code').value.trim();
       if (!name || !code) return;
 
-      if (name === 'Admin') {
-        if (!(await adminLogin(code))) { showToast('Mã Admin không chính xác!', '#ef4444'); return; }
+      const currentAdminCode = state.adminCode || '2399';
+
+      if (name === 'Admin' && code === currentAdminCode) {
         document.getElementById('login-modal').classList.add('hidden');
         renderAdminPanel();
         document.getElementById('admin-modal').classList.remove('hidden');
         return;
       }
 
-      if (!NAME_RE.test(name)) { showToast('Tên 2-20 ký tự: chữ, số, dấu cách, _ hoặc -', '#ef4444'); return; }
-      if (!(state.players && state.players[name]) && code.length < 6) { showToast('Mã truy cập mới cần ít nhất 6 ký tự!', '#ef4444'); return; }
+      if (!state.players) state.players = {};
 
-      const r = await loginOrRegister(name, code);
-      if (r === 'bad') { showToast('Sai mã truy cập (hoặc tên đã có người dùng)!', '#ef4444'); return; }
-      if (needInit) { await stateRef.set(buildDefaultState()); needInit = false; }
-      if (r === 'new') {
-        await db.ref(GP + 'state/players/' + name).set({ points: 0 });
+      if (!state.players[name]) {
+        state.players[name] = { code, points: 0 };
+        db.ref('games/lang9i/state/players/' + name).set(state.players[name]);
         addActivityFeed(`🆕 ${name} vừa gia nhập Làng 9i!`);
+      } else if (state.players[name].code !== code) {
+        showToast('Sai mã truy cập cho tài khoản này!', '#ef4444');
+        return;
       }
 
       session = { name };
@@ -1402,18 +1347,41 @@
 
     function buyTile(id, houseIdx) {
       if (!db || !state || !session) return;
-      callAct({ a: 'buy', id, house: houseIdx })
-        .then(() => { closeTileModal(); showToast('Mua đất và xây nhà thành công!', '#10b981'); })
-        .catch(e => showToast(errTxt(e, 'Không mua được ô đất!'), '#ef4444'));
+      const z = ZONES.find(z => z.key === state.tiles[id].zone);
+      const h = HOUSES[houseIdx];
+      const totalCost = z.price + h.cost;
+
+      const playerRef = db.ref('games/lang9i/state/players/' + session.name);
+      playerRef.transaction(player => {
+        if (!player) return player;
+        if ((player.points || 0) < totalCost) return;
+        player.points -= totalCost;
+        return player;
+      }, (err, committed) => {
+        if (err || !committed) {
+          showToast('Bạn không đủ điểm để mua ô đất và xây nhà này!', '#ef4444');
+          return;
+        }
+
+        db.ref('games/lang9i/state/tiles/' + id).update({
+          owner: session.name,
+          house: houseIdx,
+          builtAt: Date.now()
+        });
+
+        addActivityFeed(`🏗️ ${session.name} đã mua đất #${id + 1} (${z.name}) & xây ${h.emoji} ${h.name}`);
+        closeTileModal();
+        showToast('Mua đất và xây nhà thành công!', '#10b981');
+      });
     }
 
-    async function transferTile(id) {
+    function transferTile(id) {
       if (!db || !state || !session) return;
       const p = getPlayer();
       const to = document.getElementById('transfer-to').value.trim();
       const code = document.getElementById('transfer-code').value.trim();
 
-      if (!(await claimSession(session.name, code))) {
+      if (code !== p.code) {
         showToast('Mã xác nhận Access Code không đúng!', '#ef4444');
         return;
       }
@@ -1422,9 +1390,10 @@
         return;
       }
 
-      callAct({ a: 'transfer', id, to })
-        .then(() => { closeTileModal(); showToast('Đã chuyển nhượng đất thành công!', '#10b981'); })
-        .catch(e => showToast(errTxt(e, 'Chuyển nhượng thất bại!'), '#ef4444'));
+      db.ref('games/lang9i/state/tiles/' + id).update({ owner: to });
+      addActivityFeed(`🔄 ${session.name} đã chuyển nhượng ô đất #${id + 1} cho ${to}`);
+      closeTileModal();
+      showToast('Đã chuyển nhượng đất thành công!', '#10b981');
     }
 
     function sendOffer(id) {
@@ -1471,9 +1440,18 @@
       const h = HOUSES[t.house];
       if (!h) return;
 
-      callAct({ a: 'harvest', id })
-        .then(() => { showToast(`Thu hoạch thành công +${h.profit} điểm!`, '#10b981'); closeTileModal(); })
-        .catch(e => showToast(errTxt(e, 'Lỗi khi thu hoạch, vui lòng thử lại!'), '#ef4444'));
+      const now = Date.now();
+      const updates = {};
+      updates[`games/lang9i/state/players/${session.name}/points`] = (getPlayer().points || 0) + h.profit;
+      updates[`games/lang9i/state/tiles/${id}/builtAt`] = now;
+
+      db.ref().update(updates).then(() => {
+        addActivityFeed(`🌾 ${session.name} vừa thu hoạch +${h.profit} điểm từ ô đất #${id + 1}`);
+        showToast(`Thu hoạch thành công +${h.profit} điểm!`, '#10b981');
+        closeTileModal();
+      }).catch(() => {
+        showToast('Lỗi khi thu hoạch, vui lòng thử lại!', '#ef4444');
+      });
     }
 
     function checkOffers() {
@@ -1516,9 +1494,43 @@
 
     function acceptOffer(offerId) {
       if (!db || !state) return;
-      callAct({ a: 'accept', offerId })
-        .then(() => { showToast('Giao dịch chuyển nhượng thành công!', '#10b981'); checkOffers(); })
-        .catch(e => showToast(errTxt(e, 'Giao dịch thất bại!'), '#ef4444'));
+      const o = (state.offers || {})[offerId];
+      if (!o) return;
+
+      stateRef.transaction(current => {
+        if (!current || !current.offers || !current.offers[offerId]) return;
+        const live = current.offers[offerId];
+        const tile = current.tiles && current.tiles[live.tileId];
+        const seller = current.players && current.players[live.to];
+        const buyer = current.players && current.players[live.from];
+
+        if (!tile || tile.owner !== session.name || !seller || !buyer || (buyer.points || 0) < live.price) return;
+
+        buyer.points -= live.price;
+        seller.points = (seller.points || 0) + live.price;
+        tile.owner = live.from;
+
+        if (!current.activityFeed) current.activityFeed = [];
+        current.activityFeed.unshift({
+          msg: `✅ ${live.to} đã bán ô đất #${live.tileId + 1} cho ${live.from} với giá ${live.price} điểm`,
+          time: Date.now()
+        });
+
+        Object.keys(current.offers).forEach(id => {
+          if (current.offers[id] && current.offers[id].tileId === live.tileId) {
+            delete current.offers[id];
+          }
+        });
+
+        return current;
+      }, (err, committed) => {
+        if (!committed || err) {
+          showToast('Giao dịch thất bại! Người mua không đủ điểm hoặc ô đất đã đổi chủ.', '#ef4444');
+        } else {
+          showToast('Giao dịch chuyển nhượng thành công!', '#10b981');
+          checkOffers();
+        }
+      });
     }
 
     function rejectOffer(offerId) {
@@ -1543,9 +1555,11 @@
       m.classList.remove('hidden');
     }
 
-    async function adminAuth() {
+    function adminAuth() {
       const inputCode = document.getElementById('admin-code-input').value.trim();
-      if (!(await adminLogin(inputCode))) {
+      const currentAdminCode = state.adminCode || '2399';
+
+      if (inputCode !== currentAdminCode) {
         showToast('Mã Admin không chính xác!', '#ef4444');
         return;
       }
@@ -1564,7 +1578,7 @@
         <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4">
           <h4 class="font-bold text-xs text-amber-900 uppercase mb-1.5">🔑 Cài Đặt Mã Admin (Lưu trên Firebase)</h4>
           <div class="flex gap-2">
-            <input id="new-admin-code" type="text" placeholder="Mã Admin mới (≥ 6 ký tự)" value="" class="flex-1 border border-amber-300 rounded-lg px-2.5 py-1 text-xs font-bold">
+            <input id="new-admin-code" type="text" placeholder="Mã Admin mới" value="${state.adminCode || '2399'}" class="flex-1 border border-amber-300 rounded-lg px-2.5 py-1 text-xs font-bold">
             <button onclick="saveAdminCode()" class="bg-amber-600 hover:bg-amber-700 text-white px-3 py-1 rounded-lg font-bold text-xs">Lưu Mã</button>
           </div>
         </div>
@@ -1617,11 +1631,9 @@
         showToast('Mã Admin không được để trống!', '#ef4444');
         return;
       }
-      if (newCode.length < 6) { showToast('Mã Admin cần ít nhất 6 ký tự!', '#ef4444'); return; }
-      hashCode('Admin', newCode)
-        .then(h => db.ref(GP + 'secrets/admin/h').set(h).then(() => db.ref(GP + 'admins/' + uid).set(h)))
-        .then(() => showToast('Đã lưu mã Admin mới!', '#10b981'))
-        .catch(() => showToast('Lưu mã Admin thất bại!', '#ef4444'));
+      db.ref('games/lang9i/state/adminCode').set(newCode).then(() => {
+        showToast('Đã lưu mã Admin mới lên Firebase!', '#10b981');
+      });
     }
 
     function adjustPlayerPoints(name, direction) {
@@ -1635,9 +1647,16 @@
         return;
       }
 
-      callAct({ a: 'adminAdjust', name, amount, dir: direction })
-        .then(() => { showToast('Đã cập nhật điểm!', '#10b981'); renderAdminPanel(); })
-        .catch(e => showToast(errTxt(e, 'Cập nhật điểm thất bại!'), '#ef4444'));
+      db.ref('games/lang9i/state/players/' + name + '/points').transaction(pts => {
+        pts = pts || 0;
+        return direction > 0 ? pts + amount : Math.max(0, pts - amount);
+      }, (err, committed) => {
+        if (committed) {
+          addActivityFeed(`⚙️ Admin đã ${direction > 0 ? 'cộng' : 'trừ'} ${amount} điểm của ${name}`);
+          showToast('Đã cập nhật điểm!', '#10b981');
+          renderAdminPanel();
+        }
+      });
     }
 
     function changePlayerCode(name) {
@@ -1651,10 +1670,10 @@
         return;
       }
 
-      hashCode(name, newCode)
-        .then(h => db.ref(GP + 'state/players/' + name + '/code').remove().then(() => db.ref(GP + 'secrets/players/' + name).set({ h })))
-        .then(() => { showToast('Đã đổi Access Code thành công!', '#10b981'); renderAdminPanel(); })
-        .catch(() => showToast('Đổi mã thất bại!', '#ef4444'));
+      db.ref('games/lang9i/state/players/' + name + '/code').set(newCode).then(() => {
+        showToast('Đã đổi Access Code thành công!', '#10b981');
+        renderAdminPanel();
+      });
     }
 
     function deletePlayer(name) {
@@ -1663,7 +1682,6 @@
       showConfirmDialog(`Bạn có chắc chắn muốn xóa người chơi "${name}" và thu hồi tất cả ô đất họ sở hữu?`, () => {
         const updates = {};
         updates['games/lang9i/state/players/' + name] = null;
-        updates['games/lang9i/secrets/players/' + name] = null;
 
         (state.tiles || []).forEach((tile, i) => {
           if (tile.owner === name) {
@@ -1978,7 +1996,9 @@ function dzClick(e){const b=e.target.closest('button');if(!b)return;const tl=sta
   if(b.dataset.x){showRoom(ty,effD(tl));$('v3d-design').classList.add('hidden')}
   else if(b.dataset.p)showRoom(ty,+b.dataset.p);
   else if(b.dataset.b!==undefined){const dz=+b.dataset.b,id=inTile,cost=dcost(ty,dz),me=session.name;
-    callAct({a:'design',id,dz}).then(()=>{showToast('🛋️ Đã áp dụng thiết kế "'+DN[dz]+'"','#10b981');showRoom(ty,dz);if(!$('v3d-design').classList.contains('hidden'))dzRender()}).catch(e=>{showToast(errTxt(e,'Không đủ điểm hoặc bạn không phải chủ nhà'),'#ef4444');if(!$('v3d-design').classList.contains('hidden'))dzRender()})}}
+    stateRef.transaction(cur=>{const t=cur&&cur.tiles&&cur.tiles[id],p=cur&&cur.players&&cur.players[me];if(!t||!p||t.owner!==me)return;if(t.dKey!==dKey(t)){t.dKey=dKey(t);t.dOwned=[0];t.design=0}
+      const own=Object.values(t.dOwned||{0:0});if(!own.includes(dz)){if((p.points||0)<cost)return;p.points-=cost;own.push(dz);(cur.activityFeed=cur.activityFeed||[]).unshift({msg:'🛋️ '+me+' mua thiết kế nội thất "'+DN[dz]+'" cho '+HOUSES[ty].name+' (-'+cost+' điểm)',time:Date.now()});cur.activityFeed.length=Math.min(cur.activityFeed.length,60)}
+      t.dOwned=own;t.design=dz;return cur},(e2,ok)=>{if(ok){showToast('🛋️ Đã áp dụng thiết kế "'+DN[dz]+'"','#10b981');showRoom(ty,dz)}else showToast('Không đủ điểm hoặc bạn không phải chủ nhà','#ef4444');if(!$('v3d-design').classList.contains('hidden'))dzRender()})}}
 function mkRoom(t,dz=0){const[w,d,h]=RM[t],[fc,wc]=dz?[TH[dz].fl,TH[dz].wl]:PAL[t],g=new T.Group(),cl=[],hw=w/2,hd=d/2;g.position.set(OX,0,OZ);
   bx(g,w,.2,d,fc,0,-.1,0);const sh=new T.Mesh(new T.BoxGeometry(w,h+.3,d),new T.MeshLambertMaterial({color:wc,side:T.BackSide}));sh.position.y=(h-.3)/2;g.add(sh);
   bx(g,2.2,2.8,.15,0x5b3a1e,0,1.4,hd-.05);bx(g,1.6,2.4,.1,0xfde68a,0,1.25,hd-.12,{emissive:0xfde68a});
@@ -2034,34 +2054,13 @@ function update(dt,now){
   if(!inn&&!lock&&!a2&&nearRace())a2='🏁 Vào trường đua (F)';const b1=$('v3d-act'),b2=$('v3d-enter');$('v3d-dz').classList.toggle('hidden',!(inn&&inTile!=null&&!lock&&state.tiles[inTile].owner===session.name));b1.textContent=a1||'';b1.classList.toggle('hidden',!a1);b2.textContent=a2||'';b2.classList.toggle('hidden',!a2)}
 function resize(){if(!renderer)return;const m=$('v3d-mount');renderer.setSize(m.clientWidth,m.clientHeight);cam.aspect=m.clientWidth/m.clientHeight;cam.updateProjectionMatrix()}
 function tick(ts){if(!active)return;requestAnimationFrame(tick);const now=ts/1000,dt=Math.min(now-prev,.05);prev=now;
-  if(now-lastSync>.6&&state){lastSync=now;syncPlots()}if(mode==='race'&&window.RACE)RACE.tick(dt,now);else update(dt,now);sky(dt,now);live(dt,now);mini(now);renderer.render(scene,cam)}
+  if(now-lastSync>.6&&state){lastSync=now;syncPlots()}if(mode==='race'&&window.RACE)RACE.tick(dt,now);else update(dt,now);sky(dt,now);live(dt,now);renderer.render(scene,cam)}
 function load(){return window.THREE?Promise.resolve():new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
 async function enter(){if(!session||!state){showToast('Hãy đăng nhập trước!','#f59e0b');return}
   $('v3d').classList.remove('hidden');document.body.style.overflow='hidden';$('v3d-msg').style.display='flex';
   try{await load();T=window.THREE;if(!ready)init()}catch(e){console.error(e);showToast('Không tải được thư viện 3D (kiểm tra mạng)','#ef4444');exit();return}
   $('v3d-msg').style.display='none';liveStart();active=true;resize();syncPlots();prev=performance.now()/1000;requestAnimationFrame(tick)}
 function exit(){if(window.RACE)RACE.abort();if(mode==='in')leave();liveStop();active=false;$('v3d').classList.add('hidden');document.body.style.overflow='';joy.x=joy.y=0}
-// ---------- minimap ----------
-let mmC=null,mmS=null,mmB=null,mmT=0;const MM={w:150,h:104};
-function mmBuild(){mmC=$('v3d-mini');const d=Math.min(devicePixelRatio||1,2);mmC.width=MM.w*d;mmC.height=MM.h*d;
-  let a=1e9,b=1e9,c=-1e9,e=-1e9;SHALLOW.forEach(p=>{a=Math.min(a,p[0]);c=Math.max(c,p[0]);b=Math.min(b,p[1]);e=Math.max(e,p[1])});
-  const sc=Math.min((MM.w-8)/(c-a),(MM.h-8)/(e-b));mmB={a,b,sc,d,ox:(MM.w-(c-a)*sc)/2,oy:(MM.h-(e-b)*sc)/2};
-  mmS=document.createElement('canvas');mmS.width=mmC.width;mmS.height=mmC.height;const g=mmS.getContext('2d');g.scale(d,d);
-  const P=p=>[mmB.ox+(p[0]-a)*sc,mmB.oy+(p[1]-b)*sc],poly=(arr,col)=>{g.beginPath();arr.forEach((p,i)=>{const q=P(p);i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])});g.closePath();g.fillStyle=col;g.fill()};
-  g.fillStyle='#0ea5e9';g.fillRect(0,0,MM.w,MM.h);poly(SHALLOW,'#67e8f9');poly(SAND,'#eadba0');poly(GRASS,'#6bbf59');
-  g.beginPath();RIV.forEach((p,i)=>{const q=P(p);i?g.lineTo(q[0],q[1]):g.moveTo(q[0],q[1])});g.strokeStyle='#38bdf8';g.lineWidth=Math.max(2,5*sc);g.lineJoin='round';g.stroke();
-  g.fillStyle='rgba(15,23,42,.85)';g.font='bold 10px DM Sans,Arial';g.fillText('B',MM.w-12,13)}
-function mini(now){if(now-mmT<.08)return;mmT=now;if(!mmC)mmBuild();
-  const vis=mode==='out';mmC.style.display=vis?'':'none';if(!vis)return;
-  const g=mmC.getContext('2d'),{a,b,sc,ox,oy,d}=mmB,X=x=>ox+(x-a)*sc,Y=z=>oy+(z-b)*sc;
-  g.setTransform(1,0,0,1,0,0);g.drawImage(mmS,0,0);g.scale(d,d);
-  const rv=LAND_POSITIONS.find(p=>p.race);if(rv){const q=W(rv.x,rv.y);g.font='11px sans-serif';g.textAlign='center';g.textBaseline='middle';g.fillText('🏁',X(q[0]),Y(q[1]))}
-  plots.forEach(p=>{const t=state.tiles[p.pos.id];if(!t)return;const mine=t.owner===session.name;g.beginPath();g.arc(X(p.x),Y(p.z),Math.max(2.4,p.R*sc*.8),0,6.283);g.fillStyle=!t.owner?'#fbbf24':mine?'#10b981':'#e11d48';g.fill();g.lineWidth=p.ready?2:1;g.strokeStyle=p.ready&&Math.sin(now*8)>0?'#fde047':'#fff';g.stroke()});
-  for(const n in others){const o=others[n];if(!o.g.visible)continue;g.beginPath();g.arc(X(o.g.position.x),Y(o.g.position.z),3,0,6.283);g.fillStyle='#'+hue(n).toString(16).padStart(6,'0');g.fill();g.lineWidth=1.2;g.strokeStyle='#fff';g.stroke()}
-  const hp=hero.position,hx=X(hp.x),hy=Y(hp.z),va=Math.atan2(-Math.cos(camS.yaw),-Math.sin(camS.yaw));
-  g.beginPath();g.moveTo(hx,hy);g.arc(hx,hy,24,va-.6,va+.6);g.closePath();g.fillStyle='rgba(255,255,255,.28)';g.fill();
-  g.save();g.translate(hx,hy);g.rotate(Math.atan2(Math.cos(hero.rotation.y),Math.sin(hero.rotation.y)));g.beginPath();g.moveTo(6,0);g.lineTo(-4,-3.6);g.lineTo(-4,3.6);g.closePath();g.fillStyle='#fff';g.fill();g.lineWidth=1.4;g.strokeStyle='#0f172a';g.stroke();g.restore()}
-
 window.V3={get T(){return T},get scene(){return scene},get cam(){return cam},get hero(){return hero},keys,joy,sprintBtn,camS,makeHero,pose,hue,label,bx,cy,sp,put,mat,ribbon,GLASS,
   get mode(){return mode},set mode(m){mode=m},set inH(o){inH=o},get tmode(){return tmode},setTmode(v){tmode=v;$('v3d-time').textContent=['🌗','☀️','🌙'][v]}};
 
@@ -2073,7 +2072,8 @@ function drawRace2D(pos){ctx.save();ctx.translate(pos.x,pos.y);ctx.beginPath();c
   ctx.font=Math.floor(26/Math.sqrt(camera.zoom))+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('🏍️',0,0);ctx.font='bold 12px DM Sans, Arial';ctx.strokeStyle='rgba(0,0,0,.8)';ctx.lineWidth=3;ctx.strokeText('🏁 Trường đua Kiên Thanh',0,pos.radius+18);ctx.fillStyle='#fde047';ctx.fillText('🏁 Trường đua Kiên Thanh',0,pos.radius+18);ctx.restore()}
 let _crl=false;
 function cancelRaceLot(){const t=state&&state.tiles&&state.tiles[6];if(!t||!t.owner||_crl||!stateRef)return;_crl=true;
-  callAct({a:'raceLot'}).catch(()=>{}).then(()=>{_crl=false})}
+  stateRef.transaction(cur=>{const tl=cur&&cur.tiles&&cur.tiles[6];if(!tl||!tl.owner)return;const o=cur.players&&cur.players[tl.owner];if(o){let r=(ZONES.find(z=>z.key===tl.zone)||{price:0}).price;if(tl.house!=null&&HOUSES[tl.house])r+=HOUSES[tl.house].cost;o.points=(o.points||0)+r}
+    Object.keys(cur.offers||{}).forEach(id=>{if(cur.offers[id].tileId===6)delete cur.offers[id]});(cur.activityFeed=cur.activityFeed||[]).unshift({msg:'🏁 Ô đất #7 đã trở thành Trường đua Kiên Thanh — '+tl.owner+' được hoàn tiền',time:Date.now()});tl.owner=null;tl.house=null;tl.builtAt=null;return cur},()=>{_crl=false})}
 (function(){
 const $=id=>document.getElementById(id),FEE=20,MAXP=5,LAPS=3,VMAX=60,RX=4000;
 const BIKES=[{n:'Tia Chớp',c:0xdc2626,e:'🔴'},{n:'Bạo Chúa',c:0x2563eb,e:'🔵'},{n:'Ong Vàng',c:0xfacc15,e:'🟡'}];
@@ -2117,7 +2117,7 @@ function onRoom(s){const r=s.val();
   room=r;if(!r.players[r.host]){const f=Object.entries(r.players).sort((a,b)=>a[1].j-b[1].j)[0];if(f&&f[0]===me())roomRef.child('host').set(me())}if(r.status==='countdown'&&!R&&view!=='race')startRace();else if(r.status==='done'&&R)finishView();else if(r.status==='waiting'&&R){endRace();view='room'}render()}
 function startRace(){view='race';render();const key=roomId+'|'+room.startAt,go=()=>{if(room&&room.status!=='waiting')buildRace()};
   if(paidKey===key)return go();
-  callAct({a:'raceFee',room:roomId}).then(()=>{paidKey=key;go()}).catch(e=>{showToast(errTxt(e,'Không đủ điểm để vào đua!'),'#ef4444');leaveRoom()})}
+  db.ref('games/lang9i/state/players/'+me()).transaction(p=>{if(!p||(p.points||0)<FEE)return;p.points-=FEE;return p},(e,c)=>{if(c){paidKey=key;go()}else{showToast('Không đủ điểm để vào đua!','#ef4444');leaveRoom()}})}
 // ---------- xe ----------
 function wheel(L,z){const T=V3.T,w=new T.Group();w.position.set(0,.42,z);V3.put(w,new T.TorusGeometry(.32,.11,8,16),0x111827,0,0,0).rotation.y=Math.PI/2;V3.bx(w,.06,.62,.08,0x9ca3af,0,0,0);L.add(w);return w}
 function mkBike(type){const T=V3.T,{bx:B,cy:C,sp:S,put:P}=V3,g=new T.Group(),L=new T.Group(),c=BIKES[type].c;g.add(L);const fw=wheel(L,1.05),rw=wheel(L,-1.0);
@@ -2187,7 +2187,7 @@ function rideStep(dt){const S=R.s,w=R.w,k=V3.keys,j=V3.joy,thr=(k.w||k.arrowup?1
   if(S.inv>0)S.inv-=dt;else if(S.y<1.2){for(const o of R.obs)if(Math.hypot(o.x-S.x,o.z-S.z)<o.r+.9){if(S.v>38)crash();else{S.v*=.3;S.inv=.4}break}
     if(S.m===0)for(const q in R.traps){const tp=R.traps[q];if(tp.on&&Math.hypot(tp.x-S.x,tp.z-S.z)<tp.r+.7){if(S.v>10)crash();else{S.v*=.5;S.inv=.4}break}}}
   if(S.u>=R.laps*R.N&&!R.finished){R.finished=true;roomRef.child('winner').transaction(w=>w?undefined:me(),(e,c)=>{if(c){roomRef.update({status:'done'});award()}})}}
-function award(){roomRef.child('settled').transaction(v=>v?undefined:true,(e,c)=>{if(c)callAct({a:'raceAward',room:roomId}).catch(()=>{})})}
+function award(){const pot=room.pot,n=me();roomRef.child('settled').transaction(v=>v?undefined:true,(e,c)=>{if(c)stateRef.transaction(cur=>{if(!cur||!cur.players||!cur.players[n])return;cur.players[n].points=(cur.players[n].points||0)+pot;(cur.activityFeed=cur.activityFeed||[]).unshift({msg:'🏁 '+n+' thắng cuộc đua Trường đua Kiên Thanh, nhận '+pot+' điểm',time:Date.now()});cur.activityFeed.length=Math.min(cur.activityFeed.length,60);return cur})})}
 function tumbleStep(dt){const q=R.tum,S=R.s,B=R.bike,rd=R.rider;q.t+=dt;const f=Math.max(0,1-q.t/1.3);S.x+=q.bvx*f*dt;S.z+=q.bvz*f*dt;
   B.L.rotation.z=Math.min(1.45,q.t*5);B.L.rotation.x=q.t<.8?q.t/.8*6.283:0;B.g.position.y=.4+(q.t<.8?Math.abs(Math.sin(q.t*5))*1.2:0);
   const a=Math.min(q.t,q.Ta),air=q.t<q.Ta;S.rx=q.x0+q.rvx*a*.9;S.rz=q.z0+q.rvz*a*.9;rd.position.set(S.rx,air?Math.max(0,q.ry+q.rvy*q.t-11*q.t*q.t):0,S.rz);rd.rotation.set(air?-q.t*9:-1.45*(1-Math.min(1,(q.t-q.Ta)/.7)),Math.atan2(q.rvx,q.rvz),0);
