@@ -306,7 +306,6 @@
         <button id="link-switch-btn" type="button" class="w-full py-1.5 text-slate-400 hover:text-slate-600 text-xs font-semibold">Dùng tài khoản Google khác</button>
       </div>
 
-      <button type="button" onclick="openAdminLogin()" class="mt-4 text-[11px] text-slate-300 hover:text-slate-500 font-semibold">Quản trị viên</button>
     </div>
   </div>
 
@@ -2757,7 +2756,7 @@ function leaveRes(){if(mode!=='res')return;mode='out';if(resG)resG.visible=false
 // ================= BẢO TÀNG TRÀ THE HOUSE =================
 const MUPOS=LAND_POSITIONS.find(p=>p.museum),MUW=W(MUPOS.x,MUPOS.y),MUD=[MUW[0],MUW[1]+3.8];
 const MU_X=0,MU_Z=3000,MU_HX=36,MU_HZ=24,MU_HH=11;
-const MU_KEY='my9ivillage@gmail·com';
+const MU_KEY='Tra';
 const MU_CAP={photo:24,statue:12,item:16,story:12};
 const MU_NAME={photo:'ảnh',statue:'tượng',item:'vật phẩm',story:'truyện'};
 let muG=null,muBuilt=false,muRects=[],muCirc=[],muSlots={photo:[],statue:[],item:[],story:[]},muHits=[],muData={photo:[],statue:[],item:[],story:[]},muRef=null,muMetaH=null,muLook=null,muPrev=null,muRay=null,muBlobs={},muTexs={};
