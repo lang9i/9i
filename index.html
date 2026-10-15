@@ -2218,7 +2218,7 @@ function blockH(x,z){let m=0;
 const spotOK=(x,z)=>inside(SAND,x,z)&&groundH(x,z)<.3&&blockH(x,z)===0;
 const seatList=()=>{const s=(HD&&HD.seats)||{};return Object.keys(s).sort((a,b)=>(s[a]-s[b])||(a<b?-1:1))};
 const dHl=h=>hero?Math.hypot(hero.position.x-h.x,hero.position.z-h.z):1e9;
-const nearHeli=()=>mode==='out'&&hero&&HS.y<1.2&&dHl(HS)<5.2&&(HC.y>=1.2||dHl(HS)<=dHl(HC));
+const nearHeli=()=>mode==='out'&&hero&&!HW&&HS.y<1.2&&dHl(HS)<5.2&&(HC.y>=1.2||dHl(HS)<=dHl(HC));
 function padTex(pt,pc){const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.fillStyle='#374151';x.beginPath();x.arc(128,128,126,0,6.283);x.fill();x.lineWidth=10;x.strokeStyle=pc||'#fbbf24';x.beginPath();x.arc(128,128,112,0,6.283);x.stroke();x.fillStyle='#fff';x.font='bold 130px DM Sans,Arial';x.textAlign='center';x.textBaseline='middle';x.fillText(pt||'H',128,138);return new T.CanvasTexture(c)}
 function buildHeli(){
   const pad=new T.Mesh(new T.CircleGeometry(4.6,40),new T.MeshBasicMaterial({map:padTex(),transparent:true,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));pad.rotation.x=-Math.PI/2;pad.position.set(HOME[0],.25,HOME[1]);scene.add(pad);
@@ -2240,17 +2240,17 @@ function setHL(n){if(hLn===n)return;hLn=n;if(hLbl){hg.remove(hLbl);if(hLbl.mater
 function seatTo(m,i,pilot){const s=SEATS[Math.min(i,3)],c=Math.cos(HS.r),sn=Math.sin(HS.r),H=m.userData;
   m.position.set(HS.x+s[0]*c+s[1]*sn,.22+HS.y+.26,HS.z-s[0]*sn+s[1]*c);m.rotation.y=HS.r;m.scale.setScalar(.62);
   H.lL.rotation.x=H.lR.rotation.x=-1.45;H.up.rotation.x=0;H.aL.rotation.x=H.aR.rotation.x=pilot?-1:-.35;H.aL.rotation.z=-.05;H.aR.rotation.z=.05}
-function heliSnap(s){HD=s.val()||{}}
+function heliSnap(s){const pv=HD;HD=s.val()||{};const b=HD.boom;if(hBoomSeen===null){hBoomSeen=b?b.id:'';return}if(b&&b.id!==hBoomSeen){hBoomSeen=b.id;wreckStart(b,pv)}}
 function offSnap(s){srvOff=s.val()||0}
-function heliStart(){if(!db)return;hInit=false;HD=null;heliRef=db.ref('games/lang9i/heli');heliRef.on('value',heliSnap);offRef=db.ref('.info/serverTimeOffset');offRef.on('value',offSnap)}
-function heliStop(){if(heliRef){heliRef.off('value',heliSnap);heliRef=null}if(offRef){offRef.off('value',offSnap);offRef=null}HD=null;for(const n in seatM){scene.remove(seatM[n]);delete seatM[n]}}
+function heliStart(){if(!db)return;hInit=false;HD=null;hBoomSeen=null;HW=null;heliRef=db.ref('games/lang9i/heli');heliRef.on('value',heliSnap);offRef=db.ref('.info/serverTimeOffset');offRef.on('value',offSnap)}
+function heliStop(){HW=null;if(heliRef){heliRef.off('value',heliSnap);heliRef=null}if(offRef){offRef.off('value',offSnap);offRef=null}HD=null;for(const n in seatM){scene.remove(seatM[n]);delete seatM[n]}}
 function heliIdle(){if(!heliRef||!HD||!HD.p||seatList().length)return;const p=HD.p,t=sNow();
   if(!(p.y>.05||!spotOK(p.x,p.z)||(t-(HD.last||0)>=HOME_MS&&Math.hypot(p.x-HOME[0],p.z-HOME[1])>.6)))return;
-  heliRef.transaction(cur=>{if(!cur||!cur.p||(cur.seats&&Object.keys(cur.seats).length))return;const q=cur.p,away=Math.hypot(q.x-HOME[0],q.z-HOME[1])>.6,home={x:HOME[0],y:0,z:HOME[1],r:HR};
-    if(away&&t-(cur.last||0)>=HOME_MS){cur.p=home;return cur}
+  heliRef.transaction(cur=>{if(!cur||!cur.p||(cur.seats&&Object.keys(cur.seats).length))return;const q=cur.p,away=Math.hypot(q.x-HOME[0],q.z-HOME[1])>.6,home=homeP(HOME,HC,HR);
+    if(away&&t-(cur.last||0)>=HOME_MS&&!hBlk(HOME,HC)){cur.p=home;return cur}
     if(q.y>.05){q.y=0;if(!spotOK(q.x,q.z))cur.p=home;return cur}
     if(!spotOK(q.x,q.z)){cur.p=home;return cur}})}
-function heliBoard(){if(!heliRef||mode!=='out'||hBusy)return;const me=session.name,t0=sNow();hBusy=true;
+function heliBoard(){if(!heliRef||mode!=='out'||hBusy||HW)return;const me=session.name,t0=sNow();hBusy=true;
   heliRef.transaction(cur=>{cur=cur||{};const s=cur.seats||{},n=Object.keys(s).length;
     if(s[me]===undefined){if(n>=4)return;if(!n&&cur.p&&t0-(cur.last||0)>=HOME_MS&&Math.hypot(cur.p.x-HOME[0],cur.p.z-HOME[1])>.6)return;s[me]=t0}
     cur.seats=s;if(!cur.p)cur.p={x:HOME[0],y:0,z:HOME[1],r:HR};return cur},
@@ -2276,8 +2276,8 @@ function fly(dt,now){const me=session.name,sl=seatList(),pilot=sl[0]===me,lock=d
     const gh=groundH(HS.x,HS.z),air=HS.y-gh>.8,vt=air?(fw>0?fw*34:fw*12):0;
     HS.v+=(vt-HS.v)*Math.min(1,dt*(Math.abs(vt)<.01?2.2:1.2));if(air)HS.r+=tn*1.4*dt;
     HS.x=Math.max(-190,Math.min(190,HS.x+Math.sin(HS.r)*HS.v*dt));HS.z=Math.max(-140,Math.min(140,HS.z+Math.cos(HS.r)*HS.v*dt));
-    HS.vy+=(up*10-HS.vy)*Math.min(1,dt*3);HS.y=Math.min(70,HS.y+HS.vy*dt);const bh=blockH(HS.x,HS.z),g2=Math.max(groundH(HS.x,HS.z),bh);
-    if(HS.y<g2){const d=g2-HS.y;HS.y+=d<.05?d:d*Math.min(1,dt*10);if(HS.vy<0)HS.vy=0;if(bh>0&&up<0&&now-hWarn>3){hWarn=now;showToast('🚁 Không thể hạ cánh ở đây (gần nhà, cây hoặc trường đua), hãy chọn bãi trống','#f59e0b')}}
+    HS.vy+=(up*10-HS.vy)*Math.min(1,dt*3);HS.y=Math.min(70,HS.y+HS.vy*dt);const hf=heliSep(HS,HC),bh=blockH(HS.x,HS.z),g2=Math.max(groundH(HS.x,HS.z),bh,hf);
+    if(HS.y<g2){const d=g2-HS.y;HS.y+=d<.05?d:d*Math.min(1,dt*10);if(HS.vy<0)HS.vy=0;if((bh>0||hf>0)&&up<0&&now-hWarn>3){hWarn=now;showToast('🚁 Không thể hạ cánh ở đây (gần nhà, cây, trường đua hoặc trực thăng khác), hãy chọn bãi trống','#f59e0b')}}
     HS.pT=Math.max(-.2,Math.min(.2,HS.v/34*.18));HS.rT=air?-tn*.25*Math.min(1,Math.abs(HS.v)/12):0;HS.turning=air&&Math.abs(tn)>.05}
   const t=new T.Vector3(HS.x,HS.y+2.6,HS.z),cp=Math.cos(camS.pitch),D=camS.dist+8;
   if(pilot&&now-(camS.t||-9)>2.5)camS.yaw+=wrapA(HS.r+Math.PI-camS.yaw)*Math.min(1,dt*2.2);
@@ -2286,7 +2286,7 @@ function fly(dt,now){const me=session.name,sl=seatList(),pilot=sl[0]===me,lock=d
   const b2=$('v3d-enter');$('v3d-act').classList.add('hidden');$('v3d-dz').classList.add('hidden');b2.textContent='🪂 Xuống trực thăng (F)';b2.classList.remove('hidden')}
 function heliTick(dt,now){if(!hg||!session)return;const me=session.name,sl=seatList(),aboard=mode==='heli',pilot=aboard&&sl[0]===me;
   if(!hInit&&HD){hInit=true;if(HD.p){HS.x=HD.p.x;HS.y=HD.p.y;HS.z=HD.p.z;HS.r=HD.p.r}}
-  if(!pilot&&HD&&HD.p){const p=HD.p,k=Math.min(1,dt*8),dx=p.x-HS.x,dz=p.z-HS.z;
+  if(HW)wreckStep(dt,now);else if(!pilot&&HD&&HD.p){const p=HD.p,k=Math.min(1,dt*8),dx=p.x-HS.x,dz=p.z-HS.z;
     if(!sl.length&&Math.hypot(dx,dz)>40){HS.x=p.x;HS.z=p.z;HS.y=p.y;HS.r=p.r;HS.v=0}
     else{const dr=wrapA(p.r-HS.r);HS.x+=dx*k;HS.z+=dz*k;HS.y+=(p.y-HS.y)*k;HS.r+=dr*k;HS.v+=((dx*Math.sin(HS.r)+dz*Math.cos(HS.r))*8-HS.v)*Math.min(1,dt*6);
       HS.pT=Math.max(-.2,Math.min(.2,HS.v/34*.18));HS.rT=Math.max(-.3,Math.min(.3,-dr*1.6))}}
@@ -2295,20 +2295,20 @@ function heliTick(dt,now){if(!hg||!session)return;const me=session.name,sl=seatL
   hrot.rotation.y+=HS.w*dt;htail.rotation.x+=HS.w*1.4*dt;hdisc.visible=HS.w>14;hdisc.material.opacity=Math.min(.16,Math.max(0,(HS.w-12)/80));
   hg.position.set(HS.x,.22+HS.y,HS.z);hg.rotation.y=HS.r;hbody.rotation.x=HS.pitch;hbody.rotation.z=HS.roll;
   const gh=groundH(HS.x,HS.z);hblob.visible=HS.y-gh>.6;if(hblob.visible){hblob.position.set(HS.x,gh+.27,HS.z);const k2=1+(HS.y-gh)/50;hblob.scale.set(k2,k2,k2);hblob.material.opacity=Math.max(0,.28*(1-(HS.y-gh)/60))}
-  setHL(sl.length);hLbl.visible=HS.y<2&&!aboard;
+  setHL(sl.length);hLbl.visible=HS.y<2&&!aboard&&!HW;
   sl.forEach((n,i)=>{if(n===me){if(aboard)seatTo(hero,i,i===0)}else{let m=seatM[n];if(!m){m=makeHero(hue(n),n);m.children.forEach(c=>{if(c.isSprite)c.visible=false});scene.add(m);seatM[n]=m}seatTo(m,i,i===0)}});
   if(aboard&&!sl.includes(me))seatTo(hero,Math.min(sl.length,3),false);
   for(const n in seatM)if(!sl.includes(n)){scene.remove(seatM[n]);delete seatM[n]}
   if(pilot&&heliRef&&now-hSend>((Math.abs(HS.v)>.3||Math.abs(HS.vy)>.3||HS.turning)?.15:1.2)){hSend=now;heliRef.child('p').set({x:+HS.x.toFixed(2),y:+HS.y.toFixed(2),z:+HS.z.toFixed(2),r:+HS.r.toFixed(3)})}
-  if(now-hIdle>3){hIdle=now;heliIdle()}
+  if(now-hIdle>3){hIdle=now;if(!HW)heliIdle()}heliDmgFx(dt,now);
   if(now-hHud>.25&&mode!=='heliC'){hHud=now;const e=$('v3d-hh'),f=$('v3d-fly');
     if(!aboard){e.classList.add('hidden');f.style.display='none'}
-    else{e.classList.remove('hidden');f.style.display=pilot?'flex':'none';e.textContent='🚁 '+(pilot?'Bạn đang lái':'Phi công: '+(sl[0]||'…'))+' · ⬆ '+Math.round(HS.y)+'m · '+Math.round(Math.abs(HS.v)*3.6)+' km/h · 👥 '+sl.length+'/4'}}
+    else{e.classList.remove('hidden');f.style.display=pilot?'flex':'none';e.textContent='🚁 '+(pilot?'Bạn đang lái':'Phi công: '+(sl[0]||'…'))+' · ⬆ '+Math.round(HS.y)+'m · '+Math.round(Math.abs(HS.v)*3.6)+' km/h · 👥 '+sl.length+'/4'+((HD&&HD.dmg)?' · 🔥 Hư hại '+HD.dmg+'/3':'')}}
   const hm=aboard?1:0;if(hm!==hintM){hintM=hm;const e=$('v3d-hint');if(!HINT_0)HINT_0=e.textContent;e.textContent=hm?HINT_H:HINT_0}}
 // ---------- trực thăng chiến đấu (bắn tên lửa, chỉ là hiệu ứng - không phá nhà) ----------
 const HOMEC=[HOME[0]-10,HOME[1]],HRC=HR,MAXC=2,SEATSC=[[0,-.35,.65],[0,.95,.35]],PODS=[[-1.9,.72,.85],[1.9,.72,.85],[-1.2,.72,.85],[1.2,.72,.85]],HINT_C='Trực thăng chiến đấu: W/S tiến-lùi · A/D xoay · Space bay lên · Shift hạ xuống · X bắn tên lửa · F xuống (khi đã hạ cánh) · kéo để xoay camera';
 let HC={x:HOMEC[0],y:0,z:HOMEC[1],r:HRC,v:0,vy:0,pT:0,rT:0,pitch:0,roll:0,w:0,turning:false},HDC=null,hgC,hbodyC,hrotC,htailC,hdiscC,hblobC,hLblC,hLnC=-1,hcRef=null,hcInit=false,hcBusy=false,hcSend=0,hcIdle=0,hcHud=0,hcWarn=-9,hcHintM=-1,HINT_0C='',hcFire=-9,hcN=0,hcFireBtn=0,hcShots=null,mslMat=null,mslGeo=null,smkTex=null;
-const seatMC={},MSL=[],FXE=[],SMK=[];
+const seatMC={},MSL=[],PT=[],OB=[];
 const seatListC=()=>{const s=(HDC&&HDC.seats)||{};return Object.keys(s).sort((a,b)=>(s[a]-s[b])||(a<b?-1:1))};
 const nearHeliC=()=>mode==='out'&&hero&&HC.y<1.2&&dHl(HC)<5.2&&(HS.y>=1.2||dHl(HC)<dHl(HS));
 function buildHeliC(){
@@ -2348,8 +2348,8 @@ function heliStartC(){if(!db)return;hcInit=false;HDC=null;hcShots=null;hcRef=db.
 function heliStopC(){if(hcRef){hcRef.off('value',heliSnapC);hcRef=null}HDC=null;hcShots=null;for(const n in seatMC){scene.remove(seatMC[n]);delete seatMC[n]}clearFx()}
 function heliIdleC(){if(!hcRef||!HDC||!HDC.p||seatListC().length)return;const p=HDC.p,t=sNow();
   if(!(p.y>.05||!spotOK(p.x,p.z)||(t-(HDC.last||0)>=HOME_MS&&Math.hypot(p.x-HOMEC[0],p.z-HOMEC[1])>.6)))return;
-  hcRef.transaction(cur=>{if(!cur||!cur.p||(cur.seats&&Object.keys(cur.seats).length))return;const q=cur.p,away=Math.hypot(q.x-HOMEC[0],q.z-HOMEC[1])>.6,home={x:HOMEC[0],y:0,z:HOMEC[1],r:HRC};
-    if(away&&t-(cur.last||0)>=HOME_MS){cur.p=home;return cur}
+  hcRef.transaction(cur=>{if(!cur||!cur.p||(cur.seats&&Object.keys(cur.seats).length))return;const q=cur.p,away=Math.hypot(q.x-HOMEC[0],q.z-HOMEC[1])>.6,home=homeP(HOMEC,HS,HRC);
+    if(away&&t-(cur.last||0)>=HOME_MS&&!hBlk(HOMEC,HS)){cur.p=home;return cur}
     if(q.y>.05){q.y=0;if(!spotOK(q.x,q.z))cur.p=home;return cur}
     if(!spotOK(q.x,q.z)){cur.p=home;return cur}})}
 function heliBoardC(){if(!hcRef||mode!=='out'||hcBusy)return;const me=session.name,t0=sNow();hcBusy=true;
@@ -2379,8 +2379,8 @@ function flyC(dt,now){const me=session.name,sl=seatListC(),pilot=sl[0]===me,lock
     const gh=groundH(HC.x,HC.z),air=HC.y-gh>.8,vt=air?(fw>0?fw*38:fw*12):0;
     HC.v+=(vt-HC.v)*Math.min(1,dt*(Math.abs(vt)<.01?2.2:1.2));if(air)HC.r+=tn*1.5*dt;
     HC.x=Math.max(-190,Math.min(190,HC.x+Math.sin(HC.r)*HC.v*dt));HC.z=Math.max(-140,Math.min(140,HC.z+Math.cos(HC.r)*HC.v*dt));
-    HC.vy+=(up*10-HC.vy)*Math.min(1,dt*3);HC.y=Math.min(70,HC.y+HC.vy*dt);const bh=blockH(HC.x,HC.z),g2=Math.max(groundH(HC.x,HC.z),bh);
-    if(HC.y<g2){const d=g2-HC.y;HC.y+=d<.05?d:d*Math.min(1,dt*10);if(HC.vy<0)HC.vy=0;if(bh>0&&up<0&&now-hcWarn>3){hcWarn=now;showToast('🚀 Không thể hạ cánh ở đây (gần nhà, cây hoặc trường đua), hãy chọn bãi trống','#f59e0b')}}
+    HC.vy+=(up*10-HC.vy)*Math.min(1,dt*3);HC.y=Math.min(70,HC.y+HC.vy*dt);const hf=heliSep(HC,HS),bh=blockH(HC.x,HC.z),g2=Math.max(groundH(HC.x,HC.z),bh,hf);
+    if(HC.y<g2){const d=g2-HC.y;HC.y+=d<.05?d:d*Math.min(1,dt*10);if(HC.vy<0)HC.vy=0;if((bh>0||hf>0)&&up<0&&now-hcWarn>3){hcWarn=now;showToast('🚀 Không thể hạ cánh ở đây (gần nhà, cây, trường đua hoặc trực thăng khác), hãy chọn bãi trống','#f59e0b')}}
     HC.pT=Math.max(-.2,Math.min(.2,HC.v/38*.18));HC.rT=air?-tn*.25*Math.min(1,Math.abs(HC.v)/12):0;HC.turning=air&&Math.abs(tn)>.05}
   const t=new T.Vector3(HC.x,HC.y+2.6,HC.z),cp=Math.cos(camS.pitch),D=camS.dist+8;
   if(pilot&&now-(camS.t||-9)>2.5)camS.yaw+=wrapA(HC.r+Math.PI-camS.yaw)*Math.min(1,dt*2.2);
@@ -2409,41 +2409,103 @@ function heliTickC(dt,now){if(!hgC||!session)return;const me=session.name,sl=sea
     if(aboard){e.classList.remove('hidden');f.style.display=pilot?'flex':'none';fb.style.display='block';e.textContent='🚀 '+(pilot?'Bạn đang lái':'Phi công: '+(sl[0]||'…'))+' · ⬆ '+Math.round(HC.y)+'m · '+Math.round(Math.abs(HC.v)*3.6)+' km/h · 👥 '+sl.length+'/'+MAXC}
     else fb.style.display='none'}
   const hm=aboard?1:0;if(hm!==hcHintM){hcHintM=hm;const e=$('v3d-hint');if(!HINT_0C)HINT_0C=e.textContent;e.textContent=hm?HINT_C:HINT_0C}}
+// ----- va chạm, hư hại & phá huỷ trực thăng thường -----
+let HW=null,hBoomSeen=null,hSmk=0;
+const HBOX=[{h:()=>HS,hw:1.15,z0:-5.4,z1:1.9},{h:()=>HC,hw:2.2,z0:-6,z1:3.6}];
+function inHB(H,b,x,z){const dx=x-H.x,dz=z-H.z,c=Math.cos(H.r),s=Math.sin(H.r),lx=dx*c-dz*s,lz=dx*s+dz*c,m=.45;return Math.abs(lx)<b.hw+m&&lz>b.z0-m&&lz<b.z1+m}
+function heliBlock(x,z){if(mode!=='out'&&mode!=='heli'&&mode!=='heliC')return false;
+  for(const b of HBOX){const H=b.h();if(H.y>=2||(H===HS&&HW)||!inHB(H,b,x,z))continue;
+    if(mode==='out'&&hero&&inHB(H,b,hero.position.x,hero.position.z)&&Math.hypot(x-H.x,z-H.z)>Math.hypot(hero.position.x-H.x,hero.position.z-H.z))continue;
+    return true}return false}
+function heliSep(H,O){const R=6,dx=H.x-O.x,dz=H.z-O.z,d=Math.hypot(dx,dz);if(d>=R)return 0;
+  if(H.y<O.y+3.9&&H.y>O.y-4.2){const k=d<.01?[1,0]:[dx/d,dz/d];H.x=O.x+k[0]*R;H.z=O.z+k[1]*R;H.v*=.5}
+  return H.y>=O.y?O.y+4.2:0}
+const hBlk=(home,o)=>Math.hypot(o.x-home[0],o.z-home[1])<6&&o.y<4.2;
+function homeP(home,o,r){if(!hBlk(home,o))return{x:home[0],y:0,z:home[1],r};
+  for(let k=0;k<8;k++){const a=k*Math.PI/4,x=home[0]+Math.cos(a)*10,z=home[1]+Math.sin(a)*10;
+    if(spotOK(x,z)&&!hBlk([x,z],o)&&Math.hypot(x-HOME[0],z-HOME[1])>6&&Math.hypot(x-HOMEC[0],z-HOMEC[1])>6)return{x:+x.toFixed(2),y:0,z:+z.toFixed(2),r}}
+  return{x:home[0],y:0,z:home[1],r}}
+function damageHeli(){if(!heliRef||HW)return;const t=sNow();
+  heliRef.transaction(cur=>{if(!cur||!cur.p)return;const n=(cur.dmg||0)+1;
+    if(n>=3){const hm=homeP(HOME,HC,HR);cur.dmg=0;cur.seats=null;cur.last=t;cur.p=hm;cur.boom={id:t+'-'+Math.random().toString(36).slice(2,6),x:+HS.x.toFixed(2),y:+HS.y.toFixed(2),z:+HS.z.toFixed(2),r:+HS.r.toFixed(3),hx:hm.x,hz:hm.z}}
+    else cur.dmg=n;return cur})}
+function wreckStart(b,pv){const me=session&&session.name,ps=pv&&pv.seats?Object.keys(pv.seats).sort((a,c)=>(pv.seats[a]-pv.seats[c])||(a<c?-1:1)):[],wasPilot=ps[0]===me;
+  HW={t:0,x:b.x,y:b.y,z:b.z,vy:-2,spin:(Math.random()<.5?-1:1)*(3+Math.random()*2),st:0,hx:b.hx,hz:b.hz,sm:0};HS.x=b.x;HS.y=b.y;HS.z=b.z;HS.r=b.r;
+  boom(b.x,.22+b.y+1.6,b.z,2.4);
+  if(mode==='heli'){mode='out';heliUp=heliDn=0;hero.scale.setScalar(1);hero.children.forEach(c=>{if(c.isSprite)c.visible=true});hero.position.set(HOME[0]+5.6,.2,HOME[1]);hero.rotation.y=Math.PI/2;lastSend=0;
+    if(heliRef){heliRef.child('seats/'+me).onDisconnect().cancel();heliRef.child('last').onDisconnect().cancel()}
+    showToast('💥 Trực thăng bị bắn nổ! Bạn đã được đưa về bãi đỗ','#ef4444');
+    if(wasPilot&&heliRef)setTimeout(()=>{if(heliRef)heliRef.child('p').set({x:b.hx,y:0,z:b.hz,r:HR})},400)}}
+function wreckSmoke(fall){const ex=HS.x-Math.sin(HS.r)*1.2+(Math.random()-.5),ey=.22+HS.y+2.2,ez=HS.z-Math.cos(HS.r)*1.2+(Math.random()-.5);
+  pt({x:ex,y:ey,z:ez,vy:1.5+Math.random()*2,g:-1,dr:.8,life:1.9,s0:1.5,s1:4.8,a0:.7,col:[0x2d2926,0x1f1d1c,0x555555]});
+  pt({x:ex,y:ey-.3,z:ez,vy:1+Math.random()*2,g:-1.5,dr:1.5,life:.5,s0:1.5,s1:2.8,a0:.9,add:1,col:[0xfff0b0,0xff8a1f,0xc9300a],fp:1.2})}
+function wreckStep(dt,now){const W=HW;W.t+=dt;
+  if(W.st===0){W.vy-=20*dt;W.y+=W.vy*dt;HS.x=W.x;HS.z=W.z;HS.y=Math.max(0,W.y);HS.r+=W.spin*dt;HS.pT=.5;HS.rT=.7;HS.v=0;
+    W.sm-=dt;if(W.sm<=0){W.sm=.04;wreckSmoke(1)}
+    const gh=Math.max(groundH(W.x,W.z),0);if(W.y<=gh){W.y=gh;HS.y=gh;W.st=1;W.t=0;HS.pT=.25;HS.rT=.35;boom(W.x,.5+gh,W.z,3.2)}}
+  else{W.sm-=dt;if(W.sm<=0){W.sm=.07;wreckSmoke(0)}
+    if(W.t>1.8){pt({x:W.hx,y:.8,z:W.hz,life:.5,s0:2,s1:7,a0:.8,add:1,col:[0xffffff,0xbfdcff],fp:2});HS.x=W.hx;HS.z=W.hz;HS.y=0;HS.r=HR;HS.v=0;HS.vy=0;HS.pT=HS.rT=HS.pitch=HS.roll=0;HS.w=0;HW=null}}}
+function heliDmgFx(dt,now){const dm=HD&&HD.dmg||0;if(!dm||HW)return;hSmk-=dt;if(hSmk>0)return;hSmk=dm>=2?.06:.13;
+  if(dm>=2)wreckSmoke(0);else{const ex=HS.x-Math.sin(HS.r)*1.2,ey=.22+HS.y+2.2,ez=HS.z-Math.cos(HS.r)*1.2;pt({x:ex,y:ey,z:ez,vy:1.5,g:-.6,dr:.8,life:1.4,s0:.9,s1:2.8,a0:.5,col:[0xb9bec6,0x8b9098]})}}
 // ----- tên lửa & hiệu ứng nổ (thuần hiệu ứng hình ảnh: không đụng tới nhà, ô đất hay dữ liệu game) -----
+let fxMat=null,fxGeo=null,shake=0;
+function fxInit(){if(smkTex)return;
+  const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),gr=x.createRadialGradient(32,32,1,32,32,31);gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(.35,'rgba(255,255,255,.55)');gr.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=gr;x.fillRect(0,0,64,64);smkTex=new T.CanvasTexture(c);
+  fxMat={deb:new T.MeshLambertMaterial({color:0x2b2623}),deb2:new T.MeshLambertMaterial({color:0x6b2a14}),glow:new T.SpriteMaterial({map:smkTex,color:0xffa040,transparent:true,opacity:.95,blending:T.AdditiveBlending,depthWrite:false})};
+  fxGeo={deb:new T.BoxGeometry(.5,.25,.35),ring:new T.RingGeometry(.9,1,40),disc:new T.CircleGeometry(1,20)}}
+function colSet(m,st,k){const n=st.length-1,f=Math.min(.999,k)*n,i=f|0,u=f-i,a=st[i],b=st[i+1],ch=(h,s)=>(h>>s)&255;m.color.setRGB((ch(a,16)+(ch(b,16)-ch(a,16))*u)/255,(ch(a,8)+(ch(b,8)-ch(a,8))*u)/255,(ch(a,0)+(ch(b,0)-ch(a,0))*u)/255)}
+function pt(o){fxInit();if(PT.length>=420){const q=PT.shift();scene.remove(q.s);q.s.material.dispose()}
+  const m=new T.SpriteMaterial({map:smkTex,transparent:true,depthWrite:false,blending:o.add?T.AdditiveBlending:T.NormalBlending,opacity:o.a0===undefined?1:o.a0});colSet(m,o.col,0);
+  const s=new T.Sprite(m);s.position.set(o.x,o.y,o.z);s.scale.set(o.s0,o.s0,1);scene.add(s);
+  PT.push({s,vx:o.vx||0,vy:o.vy||0,vz:o.vz||0,g:o.g||0,dr:o.dr||0,t:0,life:o.life,s0:o.s0,s1:o.s1,a0:m.opacity,col:o.col,fp:o.fp||1})}
 function fireC(now){if(now-hcFire<.6)return;hcFire=now;
   const pod=PODS[hcN++%4],c=Math.cos(HC.r),sn=Math.sin(HC.r),pa=HC.y>1.5?.1+HC.pitch:0,cp=Math.cos(pa),
     x=HC.x+pod[0]*c+pod[2]*sn,y=.22+HC.y+pod[1],z=HC.z-pod[0]*sn+pod[2]*c,dx=sn*cp,dy=-Math.sin(pa),dz=c*cp;
-  spawnMsl(x,y,z,dx,dy,dz);
+  spawnMsl(x,y,z,dx,dy,dz,true);
   if(hcRef)hcRef.child('shots/'+session.name).set({n:hcN,x:+x.toFixed(2),y:+y.toFixed(2),z:+z.toFixed(2),dx:+dx.toFixed(3),dy:+dy.toFixed(3),dz:+dz.toFixed(3),t:firebase.database.ServerValue.TIMESTAMP})}
-function mslInit(){if(mslMat)return;
-  mslMat={body:new T.MeshLambertMaterial({color:0xe5e7eb}),nose:new T.MeshLambertMaterial({color:0xdc2626}),fin:new T.MeshLambertMaterial({color:0x374151}),fire:new T.MeshBasicMaterial({color:0xffa23a,transparent:true,opacity:.9}),spark:new T.MeshBasicMaterial({color:0xfbbf24})};
-  mslGeo={body:new T.CylinderGeometry(.1,.1,.9,8),nose:new T.ConeGeometry(.1,.3,8),fin:new T.BoxGeometry(.5,.02,.2),fire:new T.ConeGeometry(.12,.8,8),spark:new T.BoxGeometry(.18,.18,.18)};
-  const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d'),gr=x.createRadialGradient(32,32,2,32,32,30);gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=gr;x.fillRect(0,0,64,64);smkTex=new T.CanvasTexture(c)}
-function spawnMsl(x,y,z,dx,dy,dz){if(!scene||MSL.length>=14)return;mslInit();
+function mslInit(){if(mslMat)return;fxInit();
+  mslMat={body:new T.MeshLambertMaterial({color:0xe5e7eb}),nose:new T.MeshLambertMaterial({color:0xdc2626}),fin:new T.MeshLambertMaterial({color:0x374151}),fire:new T.MeshBasicMaterial({color:0xffa23a,transparent:true,opacity:.9})};
+  mslGeo={body:new T.CylinderGeometry(.1,.1,.9,8),nose:new T.ConeGeometry(.1,.3,8),fin:new T.BoxGeometry(.5,.02,.2),fire:new T.ConeGeometry(.12,.8,8)}}
+function spawnMsl(x,y,z,dx,dy,dz,own){if(!scene||MSL.length>=14)return;mslInit();
   const g=new T.Group(),mk=(geo,m,px,py,pz,rx,rz)=>{const o=new T.Mesh(geo,m);o.position.set(px,py,pz);if(rx)o.rotation.x=rx;if(rz)o.rotation.z=rz;g.add(o);return o};
   mk(mslGeo.body,mslMat.body,0,0,0,Math.PI/2);mk(mslGeo.nose,mslMat.nose,0,0,.6,Math.PI/2);mk(mslGeo.fin,mslMat.fin,0,0,-.35);mk(mslGeo.fin,mslMat.fin,0,0,-.35,0,Math.PI/2);
-  const fire=mk(mslGeo.fire,mslMat.fire,0,0,-.85,-Math.PI/2),d=new T.Vector3(dx,dy,dz).normalize();
-  g.position.set(x,y,z);g.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),d);scene.add(g);MSL.push({g,fire,d,t:0,sp:30,sm:0})}
-function puff(x,y,z,big){if(!smkTex)return;if(SMK.length>=150){const o=SMK.shift();scene.remove(o.s);o.s.material.dispose()}
-  const s=new T.Sprite(new T.SpriteMaterial({map:smkTex,color:big?0x9ca3af:0xe5e7eb,transparent:true,opacity:big?.7:.5,depthWrite:false}));s.position.set(x,y,z);const b=big?2.2:.7;s.scale.set(b,b,1);scene.add(s);SMK.push({s,t:0,life:big?1.6:.9,b,g:big?3.2:1.6,big})}
-function boom(x,y,z){mslInit();y=Math.max(y,.2);
-  const mk=(r,c,o)=>{const m=new T.Mesh(new T.SphereGeometry(r,10,8),new T.MeshBasicMaterial({color:c,transparent:true,opacity:o,depthWrite:false}));m.position.set(x,y,z);scene.add(m);return m};
-  FXE.push({k:'b',a:mk(1,0xffd34d,.95),b:mk(.7,0xff7a1a,.9),t:0,life:.55});
-  for(let i=0;i<14;i++){const m=new T.Mesh(mslGeo.spark,mslMat.spark),a=Math.random()*6.283,u=3+Math.random()*7;m.position.set(x,y,z);scene.add(m);FXE.push({k:'s',m,vx:Math.cos(a)*u,vy:3+Math.random()*8,vz:Math.sin(a)*u,t:0,life:.9})}
-  for(let i=0;i<6;i++)puff(x+(Math.random()-.5)*2,y+Math.random()*1.2,z+(Math.random()-.5)*2,1)}
+  const fire=mk(mslGeo.fire,mslMat.fire,0,0,-.85,-Math.PI/2),glow=new T.Sprite(fxMat.glow);glow.position.set(0,0,-1.1);glow.scale.set(1.8,1.8,1);g.add(glow);
+  const d=new T.Vector3(dx,dy,dz).normalize();g.position.set(x,y,z);g.quaternion.setFromUnitVectors(new T.Vector3(0,0,1),d);scene.add(g);MSL.push({g,fire,glow,d,t:0,sp:30,sm:0,own:!!own})}
+function segSph(a,b,c,r){const dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z,l=dx*dx+dy*dy+dz*dz;let t=l>0?((c[0]-a.x)*dx+(c[1]-a.y)*dy+(c[2]-a.z)*dz)/l:0;t=Math.max(0,Math.min(1,t));
+  return Math.hypot(a.x+dx*t-c[0],a.y+dy*t-c[1],a.z+dz*t-c[2])<r}
+function boom(x,y,z,K){K=K||1;fxInit();const gy=Math.max(groundH(x,z),inside(GRASS,x,z)?.2:0),low=y-gy<2.5;if(low)y=Math.max(y,gy+.3);
+  const R=()=>Math.random();
+  pt({x,y,z,life:.2,s0:3*K,s1:11*K,a0:1,add:1,col:[0xffffff,0xfff0b0],fp:2});
+  for(let i=0;i<10;i++){const a=R()*6.283,e=R()*1.2,u=(1.5+R()*4.5)*K,ch=Math.cos(e);
+    pt({x:x+(R()-.5)*K,y:y+(R()-.2)*.6*K,z:z+(R()-.5)*K,vx:Math.cos(a)*ch*u,vy:Math.sin(e)*u+1.5*K,vz:Math.sin(a)*ch*u,g:-1.5,dr:2.4,life:.5+R()*.45,s0:(1.3+R()*.8)*K,s1:(3.4+R()*1.8)*K,a0:.95,add:1,col:[0xfff2b8,0xffb52a,0xe8530f,0x6a1e0a],fp:1.3})}
+  for(let i=0;i<7;i++){const a=R()*6.283,u=(.8+R()*2)*K;
+    pt({x:x+(R()-.5)*K,y:y+R()*K*.6,z:z+(R()-.5)*K,vx:Math.cos(a)*u,vy:(1.5+R()*2.5)*K,vz:Math.sin(a)*u,g:-.8,dr:1.1,life:1.7+R()*1.1,s0:1.8*K,s1:(4.6+R()*2)*K,a0:.62,col:[0x4a4440,0x2f2c2a,0x6b6662]})}
+  for(let i=0;i<26;i++){const a=R()*6.283,e=R()*1.3,u=(5+R()*11)*K,ch=Math.cos(e);
+    pt({x,y,z,vx:Math.cos(a)*ch*u,vy:Math.sin(e)*u+3,vz:Math.sin(a)*ch*u,g:16,dr:.4,life:.45+R()*.55,s0:.45,s1:.08,a0:1,add:1,col:[0xfff7d0,0xffb22e,0xff5a14],fp:1})}
+  for(let i=0,n=4+(K*2|0);i<n;i++){const a=R()*6.283,u=(3+R()*7)*K*.7,m=new T.Mesh(fxGeo.deb,R()<.6?fxMat.deb:fxMat.deb2),s=.5+R()*.9;m.scale.set(s,s,s);m.position.set(x,y,z);scene.add(m);
+    OB.push({k:'d',m,vx:Math.cos(a)*u,vy:(5+R()*8)*Math.sqrt(K),vz:Math.sin(a)*u,rx:(R()-.5)*14,ry:(R()-.5)*14,rz:(R()-.5)*14,t:0,life:1.3+R()*.6,gy})}
+  const rm=new T.Mesh(fxGeo.ring,new T.MeshBasicMaterial({color:0xffd9a0,transparent:true,opacity:.85,blending:T.AdditiveBlending,side:T.DoubleSide,depthWrite:false}));rm.rotation.x=-Math.PI/2;rm.position.set(x,low?gy+.15:y,z);scene.add(rm);OB.push({k:'r',m:rm,t:0,life:.5,K});
+  if(low&&inside(SAND,x,z)){const sc=new T.Mesh(fxGeo.disc,new T.MeshBasicMaterial({color:0x14110f,transparent:true,opacity:.55,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2}));sc.rotation.x=-Math.PI/2;sc.position.set(x,gy+.05,z);sc.scale.setScalar(2.4*K);scene.add(sc);OB.push({k:'s',m:sc,t:0,life:4})}
+  const cd=Math.hypot(cam.position.x-x,cam.position.y-y,cam.position.z-z);shake=Math.min(1.3,Math.max(shake,K*1.1/(1+cd/16)))}
 function updMsl(dt,now){
-  for(let i=MSL.length-1;i>=0;i--){const m=MSL[i],p=m.g.position;m.t+=dt;m.sp=Math.min(95,m.sp+120*dt);p.addScaledVector(m.d,m.sp*dt);m.fire.scale.y=.8+Math.random()*.6;
-    m.sm-=dt;if(m.sm<=0){m.sm=.035;puff(p.x-m.d.x*1,p.y-m.d.y*1,p.z-m.d.z*1,0)}
-    const bh=blockH(p.x,p.z),hit=p.y<=Math.max(groundH(p.x,p.z),.15)||(m.t>.2&&bh>0&&p.y<bh)||m.t>4.2;
-    if(hit){boom(p.x,p.y,p.z);scene.remove(m.g);MSL.splice(i,1)}}}
+  for(let i=MSL.length-1;i>=0;i--){const m=MSL[i],p=m.g.position,a={x:p.x,y:p.y,z:p.z};m.t+=dt;m.sp=Math.min(95,m.sp+120*dt);p.addScaledVector(m.d,m.sp*dt);
+    m.fire.scale.y=.8+Math.random()*.6;const gs=1.5+Math.random()*.5;m.glow.scale.set(gs,gs,1);
+    m.sm-=dt;if(m.sm<=0){m.sm=.035;pt({x:p.x-m.d.x,y:p.y-m.d.y,z:p.z-m.d.z,life:.9,s0:.5,s1:1.6,a0:.5,dr:1,col:[0xf3f4f6,0xb8bcc4]})}
+    const bh=blockH(p.x,p.z);let hit=p.y<=Math.max(groundH(p.x,p.z),.15)||(m.t>.2&&bh>0&&p.y<bh)||m.t>4.2,K=1;
+    if(!hit&&!HW&&segSph(a,p,[HS.x-Math.sin(HS.r)*1.2,.22+HS.y+1.5,HS.z-Math.cos(HS.r)*1.2],3)){hit=true;K=1.2;if(m.own)damageHeli()}
+    if(hit){boom(p.x,p.y,p.z,K);scene.remove(m.g);MSL.splice(i,1)}}}
 function updFx(dt){
-  for(let i=SMK.length-1;i>=0;i--){const o=SMK[i];o.t+=dt;const k=o.t/o.life;if(k>=1){scene.remove(o.s);o.s.material.dispose();SMK.splice(i,1);continue}
-    const sc=o.b+o.g*k;o.s.scale.set(sc,sc,1);o.s.material.opacity=(o.big?.7:.5)*(1-k);if(o.big)o.s.position.y+=dt*1.2}
-  for(let i=FXE.length-1;i>=0;i--){const o=FXE[i];o.t+=dt;const k=o.t/o.life;
-    if(k>=1){if(o.k==='b'){[o.a,o.b].forEach(m=>{scene.remove(m);m.geometry.dispose();m.material.dispose()})}else scene.remove(o.m);FXE.splice(i,1);continue}
-    if(o.k==='b'){o.a.scale.setScalar(1+k*5.5);o.b.scale.setScalar(1+k*4);o.a.material.opacity=.95*(1-k);o.b.material.opacity=.9*Math.max(0,1-k*1.3)}
-    else{o.vy-=18*dt;const p=o.m.position;p.x+=o.vx*dt;p.y=Math.max(.1,p.y+o.vy*dt);p.z+=o.vz*dt;o.m.scale.setScalar(Math.max(.05,1-k))}}}
-function clearFx(){MSL.splice(0).forEach(m=>scene.remove(m.g));SMK.splice(0).forEach(o=>{scene.remove(o.s);o.s.material.dispose()});FXE.splice(0).forEach(o=>{if(o.k==='b'){[o.a,o.b].forEach(m=>{scene.remove(m);m.geometry.dispose();m.material.dispose()})}else scene.remove(o.m)})}
+  for(let i=PT.length-1;i>=0;i--){const q=PT[i];q.t+=dt;const k=q.t/q.life;if(k>=1){scene.remove(q.s);q.s.material.dispose();PT.splice(i,1);continue}
+    const d=Math.max(0,1-q.dr*dt);q.vx*=d;q.vy*=d;q.vz*=d;q.vy-=q.g*dt;const p=q.s.position;p.x+=q.vx*dt;p.y+=q.vy*dt;p.z+=q.vz*dt;
+    const sc=q.s0+(q.s1-q.s0)*Math.sqrt(k);q.s.scale.set(sc,sc,1);q.s.material.opacity=q.a0*Math.pow(1-k,q.fp);colSet(q.s.material,q.col,k)}
+  for(let i=OB.length-1;i>=0;i--){const o=OB[i];o.t+=dt;const k=o.t/o.life;
+    if(k>=1){scene.remove(o.m);if(o.k!=='d')o.m.material.dispose();OB.splice(i,1);continue}
+    if(o.k==='d'){o.vy-=22*dt;const p=o.m.position;p.x+=o.vx*dt;p.y+=o.vy*dt;p.z+=o.vz*dt;if(p.y<o.gy+.1){p.y=o.gy+.1;o.vy*=-.35;o.vx*=.6;o.vz*=.6}
+      o.m.rotation.x+=o.rx*dt;o.m.rotation.y+=o.ry*dt;o.m.rotation.z+=o.rz*dt;if(Math.random()<dt*14)pt({x:p.x,y:p.y,z:p.z,life:.7,s0:.5,s1:1.4,a0:.45,dr:1,col:[0x8b8b8b,0x555555]})}
+    else if(o.k==='r'){o.m.scale.setScalar(1+k*9*o.K);o.m.material.opacity=.85*Math.pow(1-k,1.5)}
+    else o.m.material.opacity=.55*(1-k)}
+  if(shake>.01){cam.position.x+=(Math.random()-.5)*shake;cam.position.y+=(Math.random()-.5)*shake*.7;cam.position.z+=(Math.random()-.5)*shake;shake*=Math.pow(.02,dt)}else shake=0}
+function clearFx(){MSL.splice(0).forEach(m=>scene.remove(m.g));PT.splice(0).forEach(q=>{scene.remove(q.s);q.s.material.dispose()});OB.splice(0).forEach(o=>{scene.remove(o.m);if(o.k!=='d')o.m.material.dispose()});shake=0}
 
 function signTex(t,bg,fg,w,h,f){const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle=bg;x.fillRect(0,0,w,h);x.strokeStyle=fg;x.lineWidth=8;x.strokeRect(6,6,w-12,h-12);x.fillStyle=fg;x.font='bold '+f+'px DM Sans,Arial';x.textAlign='center';x.textBaseline='middle';x.fillText(t,w/2,h/2);return new T.CanvasTexture(c)}
 function buildVenue(w){const G=new T.Group();G.position.set(w[0],.2,w[1]);scene.add(G);const g=new T.Group();g.scale.setScalar(VS);G.add(g);
@@ -2630,7 +2692,7 @@ function pick(e){if(mode==='mus'){muPick(e);return}if(mode!=='out')return;const 
   for(const h of rc.intersectObjects(plots.map(p=>p.g),true)){const p=plots.find(p=>{let o=h.object;while(o){if(o===p.g)return true;o=o.parent}});if(p){open(p);return}}}
 function open(p){selectedTileId=p.pos.id;openTileModal(p.pos.id)}
 function doAct(){if(mode==='mus'){muAct();return}if(mode!=='out'||!near||document.querySelector('.modal-overlay:not(.hidden),#rc-panel:not(.hidden),#v3d-design:not(.hidden)'))return;near.ready?harvest(near.pos.id):open(near)}
-function walkable(x,z){if(mode==='mus')return muWalk(x,z);if(mode==='in'){if(Math.abs(x-OX)>curR.w/2-.4||Math.abs(z-OZ)>curR.d/2-.4)return false;for(const c of icols)if(Math.hypot(c[0]-x,c[1]-z)<c[2]+.45)return false;return true}if(mode==='res')return resWalk(x,z);if(!inside(SAND,x,z))return false;for(const r of RECTS)if(x>r[0]-.45&&x<r[1]+.45&&z>r[2]-.45&&z<r[3]+.45)return false;for(const c of cols)if(Math.hypot(c[0]-x,c[1]-z)<c[2]+.45)return false;return true}
+function walkable(x,z){if(mode==='mus')return muWalk(x,z);if(mode==='in'){if(Math.abs(x-OX)>curR.w/2-.4||Math.abs(z-OZ)>curR.d/2-.4)return false;for(const c of icols)if(Math.hypot(c[0]-x,c[1]-z)<c[2]+.45)return false;return true}if(mode==='res')return resWalk(x,z);if(!inside(SAND,x,z))return false;for(const r of RECTS)if(x>r[0]-.45&&x<r[1]+.45&&z>r[2]-.45&&z<r[3]+.45)return false;for(const c of cols)if(Math.hypot(c[0]-x,c[1]-z)<c[2]+.45)return false;if(heliBlock(x,z))return false;return true}
 
 function update(dt,now){
   const lock=document.querySelector('.modal-overlay:not(.hidden),#rc-panel:not(.hidden),#v3d-design:not(.hidden)'),inn=mode==='in',res=mode==='res',mus=mode==='mus',p=hero.position;
