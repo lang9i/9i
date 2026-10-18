@@ -2317,8 +2317,8 @@ function fly(dt,now){const me=session.name,sl=seatList(),pilot=sl[0]===me,lock=d
     const gh=groundH(HS.x,HS.z),air=HS.y-gh>.8,vt=air?(fw>0?fw*34:fw*12):0;
     HS.v+=(vt-HS.v)*Math.min(1,dt*(Math.abs(vt)<.01?2.2:1.2));if(air)HS.r+=tn*1.4*dt;
     HS.x=Math.max(-190,Math.min(190,HS.x+Math.sin(HS.r)*HS.v*dt));HS.z=Math.max(-140,Math.min(140,HS.z+Math.cos(HS.r)*HS.v*dt));
-    HS.vy+=(up*10-HS.vy)*Math.min(1,dt*3);HS.y=Math.min(70,HS.y+HS.vy*dt);const hf=heliSep(HS,HC),bh=blockH(HS.x,HS.z),g2=Math.max(groundH(HS.x,HS.z),bh,hf);
-    if(HS.y<g2){const d=g2-HS.y;HS.y+=d<.05?d:d*Math.min(1,dt*10);if(HS.vy<0)HS.vy=0;if((bh>0||hf>0)&&up<0&&now-hWarn>3){hWarn=now;showToast('🚁 Không thể hạ cánh ở đây (gần nhà, cây, trường đua hoặc trực thăng khác), hãy chọn bãi trống','#f59e0b')}}
+    HS.vy+=(up*10-HS.vy)*Math.min(1,dt*3);HS.y=Math.min(70,HS.y+HS.vy*dt);const hf=Math.max(heliSep(HS,HC),heliWall(HS)),bh=blockH(HS.x,HS.z),g2=Math.max(groundH(HS.x,HS.z),bh,hf);
+    if(HS.y<g2){const d=g2-HS.y;HS.y+=d<.05?d:d*Math.min(1,dt*10);if(HS.vy<0)HS.vy=0;if((bh>0||hf>0)&&up<0&&now-hWarn>3){hWarn=now;showToast('🚁 Không thể hạ cánh ở đây (gần nhà, cây, trường đua, phòng game hoặc trực thăng khác), hãy chọn bãi trống','#f59e0b')}}
     HS.pT=Math.max(-.2,Math.min(.2,HS.v/34*.18));HS.rT=air?-tn*.25*Math.min(1,Math.abs(HS.v)/12):0;HS.turning=air&&Math.abs(tn)>.05}
   const t=new T.Vector3(HS.x,HS.y+2.6,HS.z),cp=Math.cos(camS.pitch),D=camS.dist+8;
   if(pilot&&now-(camS.t||-9)>2.5)camS.yaw+=wrapA(HS.r+Math.PI-camS.yaw)*Math.min(1,dt*2.2);
@@ -2420,8 +2420,8 @@ function flyC(dt,now){const me=session.name,sl=seatListC(),pilot=sl[0]===me,lock
     const gh=groundH(HC.x,HC.z),air=HC.y-gh>.8,vt=air?(fw>0?fw*38:fw*12):0;
     HC.v+=(vt-HC.v)*Math.min(1,dt*(Math.abs(vt)<.01?2.2:1.2));if(air)HC.r+=tn*1.5*dt;
     HC.x=Math.max(-190,Math.min(190,HC.x+Math.sin(HC.r)*HC.v*dt));HC.z=Math.max(-140,Math.min(140,HC.z+Math.cos(HC.r)*HC.v*dt));
-    HC.vy+=(up*10-HC.vy)*Math.min(1,dt*3);HC.y=Math.min(70,HC.y+HC.vy*dt);const hf=heliSep(HC,HS),bh=blockH(HC.x,HC.z),g2=Math.max(groundH(HC.x,HC.z),bh,hf);
-    if(HC.y<g2){const d=g2-HC.y;HC.y+=d<.05?d:d*Math.min(1,dt*10);if(HC.vy<0)HC.vy=0;if((bh>0||hf>0)&&up<0&&now-hcWarn>3){hcWarn=now;showToast('🚀 Không thể hạ cánh ở đây (gần nhà, cây, trường đua hoặc trực thăng khác), hãy chọn bãi trống','#f59e0b')}}
+    HC.vy+=(up*10-HC.vy)*Math.min(1,dt*3);HC.y=Math.min(70,HC.y+HC.vy*dt);const hf=Math.max(heliSep(HC,HS),heliWall(HC)),bh=blockH(HC.x,HC.z),g2=Math.max(groundH(HC.x,HC.z),bh,hf);
+    if(HC.y<g2){const d=g2-HC.y;HC.y+=d<.05?d:d*Math.min(1,dt*10);if(HC.vy<0)HC.vy=0;if((bh>0||hf>0)&&up<0&&now-hcWarn>3){hcWarn=now;showToast('🚀 Không thể hạ cánh ở đây (gần nhà, cây, trường đua, phòng game hoặc trực thăng khác), hãy chọn bãi trống','#f59e0b')}}
     HC.pT=Math.max(-.2,Math.min(.2,HC.v/38*.18));HC.rT=air?-tn*.25*Math.min(1,Math.abs(HC.v)/12):0;HC.turning=air&&Math.abs(tn)>.05}
   const t=new T.Vector3(HC.x,HC.y+2.6,HC.z),cp=Math.cos(camS.pitch),D=camS.dist+8;
   if(pilot&&now-(camS.t||-9)>2.5)camS.yaw+=wrapA(HC.r+Math.PI-camS.yaw)*Math.min(1,dt*2.2);
@@ -2458,6 +2458,11 @@ function heliBlock(x,z){if(mode!=='out'&&mode!=='heli'&&mode!=='heliC')return fa
   for(const b of HBOX){const H=b.h();if(H.y>=2||(H===HS&&HW)||!inHB(H,b,x,z))continue;
     if(mode==='out'&&hero&&inHB(H,b,hero.position.x,hero.position.z)&&Math.hypot(x-H.x,z-H.z)>Math.hypot(hero.position.x-H.x,hero.position.z-H.z))continue;
     return true}return false}
+// chặn trực thăng đỗ / bay xuyên qua phòng game (cả sân); bay phía trên mái thì được
+function heliWall(H){const m=3.4,T=6.8,x0=GRC[0]-24*GK-m,x1=GRC[0]+9.6*GK+m,z0=GRC[1]-9.5*GK-m,z1=GRC[1]+9.5*GK+m;
+  if(H.x<=x0||H.x>=x1||H.z<=z0||H.z>=z1)return 0;if(H.y>=T-.05)return T;
+  const dl=H.x-x0,dr=x1-H.x,dt_=H.z-z0,db=z1-H.z,mn=Math.min(dl,dr,dt_,db);if(mn===dl)H.x=x0;else if(mn===dr)H.x=x1;else if(mn===dt_)H.z=z0;else H.z=z1;H.v*=.5;return 0}
+const inGameBox=(x,z)=>x>GRC[0]-9.4*GK&&x<GRC[0]+9.4*GK&&Math.abs(z-GRC[1])<8.4*GK;
 function heliSep(H,O){const R=6,dx=H.x-O.x,dz=H.z-O.z,d=Math.hypot(dx,dz);if(d>=R)return 0;
   if(H.y<O.y+3.9&&H.y>O.y-4.2){const k=d<.01?[1,0]:[dx/d,dz/d];H.x=O.x+k[0]*R;H.z=O.z+k[1]*R;H.v*=.5}
   return H.y>=O.y?O.y+4.2:0}
@@ -2532,7 +2537,7 @@ function updMsl(dt,now){
   for(let i=MSL.length-1;i>=0;i--){const m=MSL[i],p=m.g.position,a={x:p.x,y:p.y,z:p.z};m.t+=dt;m.sp=Math.min(95,m.sp+120*dt);p.addScaledVector(m.d,m.sp*dt);
     m.fire.scale.y=.8+Math.random()*.6;const gs=1.5+Math.random()*.5;m.glow.scale.set(gs,gs,1);
     m.sm-=dt;if(m.sm<=0){m.sm=.035;pt({x:p.x-m.d.x,y:p.y-m.d.y,z:p.z-m.d.z,life:.9,s0:.5,s1:1.6,a0:.5,dr:1,col:[0xf3f4f6,0xb8bcc4]})}
-    const bh=blockH(p.x,p.z);let hit=p.y<=Math.max(groundH(p.x,p.z),.15)||(m.t>.2&&bh>0&&p.y<bh)||m.t>4.2,K=1;
+    const bh=blockH(p.x,p.z);let hit=p.y<=Math.max(groundH(p.x,p.z),.15)||(m.t>.2&&bh>0&&p.y<bh)||(m.t>.2&&p.y<6.4&&inGameBox(p.x,p.z))||m.t>4.2,K=1;
     if(!hit&&!HW&&segSph(a,p,[HS.x-Math.sin(HS.r)*1.2,.22+HS.y+1.5,HS.z-Math.cos(HS.r)*1.2],3)){hit=true;K=1.2;if(m.own)damageHeli()}
     if(hit){boom(p.x,p.y,p.z,K);scene.remove(m.g);MSL.splice(i,1)}}}
 function updFx(dt){
@@ -2756,14 +2761,12 @@ function bindInput(){
   const m=$('v3d-mount');let drag=null;
   m.addEventListener('pointerdown',e=>{lastPT=e.pointerType;drag={x:e.clientX,y:e.clientY,moved:0}});
   m.addEventListener('pointermove',e=>{if(!drag||document.pointerLockElement)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.x=e.clientX;drag.y=e.clientY;drag.moved+=Math.abs(dx)+Math.abs(dy);camS.yaw-=dx*.006;if(mode==='mus'||(mode==='hunt'&&window.HUNT&&HUNT.fps()))camS.fp=Math.max(-1.2,Math.min(1.2,(camS.fp||0)+dy*.005));else camS.pitch=Math.max(.12,Math.min(1.25,camS.pitch+dy*.005));camS.t=performance.now()/1000});
-  m.addEventListener('pointerup',e=>{if(drag&&drag.moved<6){if(document.pointerLockElement){const r=renderer.domElement.getBoundingClientRect();pick({clientX:r.left+r.width/2,clientY:r.top+r.height/2})}else pick(e)}drag=null});m.addEventListener('pointerleave',()=>drag=null);
+  m.addEventListener('pointerup',e=>{if(drag&&drag.moved<6)pick(e);drag=null});m.addEventListener('pointerleave',()=>drag=null);
   m.addEventListener('wheel',e=>{camS.dist=Math.max(5,Math.min(28,camS.dist+e.deltaY*.01));e.preventDefault()},{passive:false});
-  let lastPT='';const lockModes=()=>mode==='out'||mode==='heli'||mode==='heliC'||mode==='hunt'||mode==='mus',lockOK=()=>!document.querySelector('.modal-overlay:not(.hidden),#rc-panel:not(.hidden),#v3d-design:not(.hidden),#hu-panel:not(.hidden)');
+  let lastPT='';const lockModes=()=>mode==='hunt'&&window.HUNT&&HUNT.fps(),lockOK=()=>!document.querySelector('.modal-overlay:not(.hidden),#rc-panel:not(.hidden),#v3d-design:not(.hidden),#hu-panel:not(.hidden)');
   m.addEventListener('click',()=>{if(lastPT==='mouse'&&active&&lockModes()&&!document.pointerLockElement&&lockOK()){try{renderer.domElement.requestPointerLock()}catch(_){}}});
-  document.addEventListener('mousemove',e=>{if(!active||document.pointerLockElement!==renderer.domElement)return;camS.yaw-=e.movementX*.0023;const dy=e.movementY*.0023;if(mode==='mus'||(mode==='hunt'&&window.HUNT&&HUNT.fps()))camS.fp=Math.max(-1.2,Math.min(1.2,(camS.fp||0)+dy));else camS.pitch=Math.max(.12,Math.min(1.25,camS.pitch+dy));camS.t=performance.now()/1000});
-  const dot=document.createElement('div');dot.id='v3d-dot';dot.style.cssText='position:fixed;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 0 1px rgba(0,0,0,.5);z-index:905;pointer-events:none;display:none';document.body.appendChild(dot);
-  let lockHint=false;document.addEventListener('pointerlockchange',()=>{const l=document.pointerLockElement===renderer.domElement;if(l&&!lockHint){lockHint=true;showToast('🖱️ Di chuột để xoay góc nhìn · bấm Esc để hiện con trỏ (khi cần bấm nút/menu)','#475569')}});
-  setInterval(()=>{const l=document.pointerLockElement===renderer.domElement;if(l&&(!active||!lockOK()||!lockModes()))document.exitPointerLock();dot.style.display=(l&&active&&!(window.HUNT&&HUNT.fps()))?'block':'none'},200);
+  document.addEventListener('mousemove',e=>{if(!active||document.pointerLockElement!==renderer.domElement)return;camS.yaw-=e.movementX*.0023;camS.fp=Math.max(-1.2,Math.min(1.2,(camS.fp||0)+e.movementY*.0023));camS.t=performance.now()/1000});
+  setInterval(()=>{if(document.pointerLockElement===renderer.domElement&&(!active||!lockOK()||!lockModes()))document.exitPointerLock()},200);
   
 const hb=(id,f)=>{const b=$(id);b.addEventListener('pointerdown',e=>{f(1);try{b.setPointerCapture(e.pointerId)}catch(_){}});['pointerup','pointercancel','lostpointercapture','pointerleave'].forEach(ev=>b.addEventListener(ev,()=>f(0)))};hb('v3d-up',v=>heliUp=v);hb('v3d-dn',v=>heliDn=v);hb('v3d-fire',v=>hcFireBtn=v);
   $('v3d-run').onclick=()=>{sprintBtn.on=!sprintBtn.on;$('v3d-run').style.background=sprintBtn.on?'#f59e0b':''};
