@@ -3400,7 +3400,7 @@ ACT.ready=ready_;
 const V=window.V3,$=id=>document.getElementById(id);
 const GRX=6000,AX=8000,JX=12000,JDUR=480,GW=28,GD=20,DUR=120,MAXP=5,RESP=5,INV=2.2,SPD=8.8,ARAD=40,LEAD=7000;
 const me=()=>session.name,R1=v=>Math.round(v*10)/10,R2=v=>Math.round(v*100)/100,wrap=a=>Math.atan2(Math.sin(a),Math.cos(a)),clamp=(v,a,b)=>Math.max(a,Math.min(b,v)),rr=(a,b)=>a+Math.random()*(b-a);
-let T=null,JT=null,G='wolf',bases={},roomsBy={wolf:{},jet:{}},base=null,roomRef=null,room=null,rooms={},view=null,roomId=null,inited=false,off=0,loc=null,GR=null,AR=null,saved=null,playedKey=null,glRef=null,glOth={},glSend=0,tapD=null,fireBtn=0,glowTex=null,smokeTex=null;
+let T=null,JT=null,G='wolf',bases={},roomsBy={wolf:{},jet:{},team:{},slayer:{}},base=null,roomRef=null,room=null,rooms={},view=null,roomId=null,inited=false,off=0,loc=null,GR=null,AR=null,saved=null,playedKey=null,glRef=null,glOth={},glSend=0,tapD=null,fireBtn=0,glowTex=null,smokeTex=null;
 const now=()=>Date.now()+off;
 // ============================ ÂM THANH (WebAudio, không cần file) ============================
 const AU={c:null,m:null,nb:null,on:true,wind:null,eng:null};
@@ -3441,6 +3441,8 @@ const SFX={
   lose(){[392,349,311,262].forEach((f,i)=>tn('triangle',f,f*.97,.4,.35,0,i*.22))},
   aa(v=1,p=0){nz(.16,'bandpass',900,300,.28*v,p,0,2);tn('square',190,90,.09,.1*v,p)},
   flak(v=1,p=0){nz(.3,'lowpass',1800,200,.45*v,p);tn('sine',120,50,.28,.35*v,p)},
+  boost(v=1,p=0){nz(.9,'bandpass',400,2400,.3*v,p);tn('sawtooth',80,200,.7,.18*v,p)},
+  roll(v=1,p=0){nz(.55,'bandpass',900,2200,.22*v,p,0,2)},
   jetpass(v=1,p=0){nz(.9,'bandpass',300,1500,.35*v,p)},
   howl
 };
@@ -3465,15 +3467,15 @@ function ptClear(){PT.splice(0).forEach(q=>{q.s.parent&&q.s.parent.remove(q.s);q
 // ============================ GIAO DIỆN ============================
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const css=`#hu-panel{position:fixed;inset:0;z-index:960;background:rgba(2,6,23,.82);display:flex;align-items:center;justify-content:center;padding:12px}#hu-panel.hidden{display:none}.huc{background:#0b1020;color:#f8fafc;border:2px solid #ef4444;border-radius:18px;padding:18px;width:100%;max-width:560px;max-height:92vh;overflow:auto;font-family:'DM Sans',Arial,sans-serif}.huc h2{font-size:21px;font-weight:900;margin-bottom:6px}.hum{font-size:12.5px;opacity:.88;margin-bottom:8px;line-height:1.5}.hut{font-size:12px;font-weight:800;color:#fca5a5;margin:10px 0 4px}.hur{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;margin:4px 0;background:#1a2036;border-radius:10px;font-size:13px}.hub{display:block;width:100%;margin-top:10px;padding:12px;border-radius:12px;background:#ef4444;color:#fff;font-weight:900;font-size:14px}.hur .hub{width:auto;margin:0;padding:6px 12px;font-size:12px}.hub:disabled{opacity:.4}.hub2{display:block;width:100%;margin-top:8px;padding:10px;border-radius:12px;background:#334155;color:#fff;font-weight:800;font-size:13px}#hu-hud{position:fixed;inset:0;z-index:950;pointer-events:none;font-family:'DM Sans',Arial,sans-serif;color:#fff;text-shadow:0 2px 6px #000}#hu-hud.hidden{display:none}#hu-hud.gr>:not(#hu-snd){display:none}#hu-hud button{pointer-events:auto}#jt-hud{position:fixed;inset:0;z-index:949;pointer-events:none;font-family:'DM Sans',Arial,sans-serif}#jt-hud.hidden{display:none}#jt-hud button{pointer-events:auto;position:absolute;border:3px solid #fff;color:#fff;font-weight:900;touch-action:none}`;
-const hudHTML=`<div id=hu-hud class="hidden gr"><div id=hu-vig style="position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 40%,rgba(220,38,38,.9) 100%)"></div><div id=hu-inv style="position:absolute;inset:0;opacity:0;box-shadow:inset 0 0 110px 20px rgba(125,211,252,.85)"></div><div id=hu-cross style="position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.45)"><div style="position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:#ef4444"></div></div><div id=hu-top style="position:absolute;top:52px;left:10px;font-weight:900;font-size:15px;line-height:1.55"></div><div id=hu-board style="position:absolute;top:52px;right:10px;font-weight:800;font-size:12px;text-align:right;line-height:1.5"></div><div id=hu-msg style="position:absolute;top:22%;left:0;right:0;text-align:center;font-weight:900;font-size:48px"></div><div id=hu-sub style="position:absolute;top:calc(22% + 60px);left:0;right:0;text-align:center;font-weight:800;font-size:17px;padding:0 10px"></div><div id=hu-hint style="position:absolute;bottom:62px;left:0;right:0;text-align:center;font-weight:800;font-size:13px;padding:0 10px"></div><div id=hu-ammo style="position:absolute;bottom:18px;left:0;right:0;text-align:center;font-weight:900;font-size:24px"></div><button id=hu-quit style="position:absolute;top:124px;left:10px;padding:6px 12px;border-radius:12px;background:rgba(15,23,42,.85);font-weight:800;font-size:12px;border:1px solid #fff5">🏳 Rời trận</button><button id=hu-snd style="position:absolute;top:96px;right:10px;width:40px;height:40px;border-radius:50%;background:rgba(15,23,42,.85);font-size:18px;border:1px solid #fff5">🔊</button><button id=hu-fire style="position:absolute;right:16px;bottom:150px;width:88px;height:88px;border-radius:50%;background:rgba(239,68,68,.9);border:3px solid #fff;font-size:34px;touch-action:none">🔫</button></div><div id=jt-hud class=hidden><canvas id=jt-cv style="position:absolute;inset:0;width:100%;height:100%"></canvas><button id=ju-quit style="top:100px;left:10px;padding:6px 12px;border-radius:12px;background:rgba(15,23,42,.85);font-size:12px;border-width:1px">🏳 Rời trận</button><button id=ju-gun style="right:16px;bottom:150px;width:84px;height:84px;border-radius:50%;background:rgba(239,68,68,.9);font-size:32px">🔫</button><button id=ju-mis style="right:108px;bottom:96px;width:70px;height:70px;border-radius:50%;background:rgba(245,158,11,.92);font-size:28px">🚀</button><button id=ju-flr style="right:16px;bottom:240px;width:70px;height:70px;border-radius:50%;background:rgba(14,165,233,.92);font-size:28px">🎇</button></div>`;
-function init(){if(inited)return;inited=true;T=V.T;bases={wolf:db.ref('games/lang9i/hunts'),jet:db.ref('games/lang9i/jets')};base=bases.wolf;db.ref('.info/serverTimeOffset').on('value',s=>off=s.val()||0);
+const hudHTML=`<div id=hu-hud class="hidden gr"><div id=hu-vig style="position:absolute;inset:0;opacity:0;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 40%,rgba(220,38,38,.9) 100%)"></div><div id=hu-inv style="position:absolute;inset:0;opacity:0;box-shadow:inset 0 0 110px 20px rgba(125,211,252,.85)"></div><div id=hu-cross style="position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;border:2px solid rgba(255,255,255,.9);border-radius:50%;box-shadow:0 0 0 1px rgba(0,0,0,.45)"><div style="position:absolute;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;background:#ef4444"></div></div><div id=hu-top style="position:absolute;top:52px;left:10px;font-weight:900;font-size:15px;line-height:1.55"></div><div id=hu-board style="position:absolute;top:52px;right:10px;font-weight:800;font-size:12px;text-align:right;line-height:1.5"></div><div id=hu-msg style="position:absolute;top:22%;left:0;right:0;text-align:center;font-weight:900;font-size:48px"></div><div id=hu-sub style="position:absolute;top:calc(22% + 60px);left:0;right:0;text-align:center;font-weight:800;font-size:17px;padding:0 10px"></div><div id=hu-hint style="position:absolute;bottom:62px;left:0;right:0;text-align:center;font-weight:800;font-size:13px;padding:0 10px"></div><div id=hu-ammo style="position:absolute;bottom:18px;left:0;right:0;text-align:center;font-weight:900;font-size:24px"></div><button id=hu-quit style="position:absolute;top:124px;left:10px;padding:6px 12px;border-radius:12px;background:rgba(15,23,42,.85);font-weight:800;font-size:12px;border:1px solid #fff5">🏳 Rời trận</button><button id=hu-snd style="position:absolute;top:96px;right:10px;width:40px;height:40px;border-radius:50%;background:rgba(15,23,42,.85);font-size:18px;border:1px solid #fff5">🔊</button><button id=hu-fire style="position:absolute;right:16px;bottom:150px;width:88px;height:88px;border-radius:50%;background:rgba(239,68,68,.9);border:3px solid #fff;font-size:34px;touch-action:none">🔫</button></div><div id=jt-hud class=hidden><canvas id=jt-cv style="position:absolute;inset:0;width:100%;height:100%"></canvas><button id=ju-quit style="top:100px;left:10px;padding:6px 12px;border-radius:12px;background:rgba(15,23,42,.85);font-size:12px;border-width:1px">🏳 Rời trận</button><button id=ju-gun style="right:16px;bottom:150px;width:84px;height:84px;border-radius:50%;background:rgba(239,68,68,.9);font-size:32px">🔫</button><button id=ju-mis style="right:108px;bottom:96px;width:70px;height:70px;border-radius:50%;background:rgba(245,158,11,.92);font-size:28px">🚀</button><button id=ju-flr style="right:16px;bottom:240px;width:70px;height:70px;border-radius:50%;background:rgba(14,165,233,.92);font-size:28px">🎇</button><button id=ju-rol style="right:100px;bottom:200px;width:62px;height:62px;border-radius:50%;background:rgba(168,85,247,.92);font-size:26px;display:none">🔄</button><button id=ju-bst style="right:100px;bottom:270px;width:62px;height:62px;border-radius:50%;background:rgba(234,88,12,.95);font-size:26px;display:none">⚡</button></div>`;
+function init(){if(inited)return;inited=true;T=V.T;bases={wolf:db.ref('games/lang9i/hunts'),jet:db.ref('games/lang9i/jets'),team:db.ref('games/lang9i/jetteam'),slayer:db.ref('games/lang9i/jetslayer')};base=bases.wolf;db.ref('.info/serverTimeOffset').on('value',s=>off=s.val()||0);
   const st=document.createElement('style');st.textContent=css;document.head.appendChild(st);document.body.insertAdjacentHTML('beforeend','<div id=hu-panel class=hidden></div>'+hudHTML);
   $('hu-panel').onclick=click;$('hu-quit').onclick=()=>{if(confirm('Rời trận? Bạn sẽ thoát khỏi phòng.'))quitMatch()};$('hu-snd').onclick=()=>{auInit();auSet(!AU.on)};auSet(AU.on);
   const fb=$('hu-fire');fb.addEventListener('pointerdown',e=>{fireBtn=1;auInit();try{fb.setPointerCapture(e.pointerId)}catch(_){}});['pointerup','pointercancel','lostpointercapture'].forEach(ev=>fb.addEventListener(ev,()=>fireBtn=0));
   const m=$('v3d-mount');m.addEventListener('pointerdown',e=>{tapD={x:e.clientX,y:e.clientY,t:performance.now(),ms:e.pointerType==='mouse',lk:!!document.pointerLockElement}});m.addEventListener('pointerup',e=>{if(tapD&&loc==='arena'&&AR&&(!tapD.ms||tapD.lk)&&Math.hypot(e.clientX-tapD.x,e.clientY-tapD.y)<7&&performance.now()-tapD.t<400)AR.tap=1;tapD=null});
   document.addEventListener('pointerdown',()=>{if(loc)auInit()},{passive:true});document.addEventListener('keydown',()=>{if(loc)auInit()},{passive:true});
-  ['wolf','jet'].forEach(g=>bases[g].on('value',s=>{const v=s.val()||{},o={};for(const id in v)if(v[id]&&v[id].players&&Object.keys(v[id].players).length)o[id]=v[id];else if(v[id]&&id!==roomId)bases[g].child(id).remove();roomsBy[g]=o;if(view==='lobby')render()}));
-  ['ju-gun','ju-mis','ju-flr'].forEach((id,i)=>{const e=$(id),k=['bg','bm','bf'][i];e.addEventListener('pointerdown',ev=>{jIn[k]=1;auInit();try{e.setPointerCapture(ev.pointerId)}catch(_){}});['pointerup','pointercancel','lostpointercapture'].forEach(n=>e.addEventListener(n,()=>jIn[k]=0))});
+  ['wolf','jet','team','slayer'].forEach(g=>bases[g].on('value',s=>{const v=s.val()||{},o={};for(const id in v)if(v[id]&&v[id].players&&Object.keys(v[id].players).length)o[id]=v[id];else if(v[id]&&id!==roomId)bases[g].child(id).remove();roomsBy[g]=o;if(view==='lobby')render()}));
+  ['ju-gun','ju-mis','ju-flr','ju-rol','ju-bst'].forEach((id,i)=>{const e=$(id),k=['bg','bm','bf','br','bb'][i];e.addEventListener('pointerdown',ev=>{jIn[k]=1;auInit();try{e.setPointerCapture(ev.pointerId)}catch(_){}});['pointerup','pointercancel','lostpointercapture'].forEach(n=>e.addEventListener(n,()=>jIn[k]=0))});
   $('ju-quit').onclick=()=>{if(confirm('Rời trận? Bạn sẽ thoát khỏi phòng.'))quitMatch()};m.addEventListener('mousedown',e=>{if(loc!=='sky'||!JT)return;if(e.button===0)jIn.mg=1;else if(e.button===2)jIn.mm=1});window.addEventListener('mouseup',e=>{if(e.button===0)jIn.mg=0;else if(e.button===2)jIn.mm=0});m.addEventListener('contextmenu',e=>{if(loc==='sky')e.preventDefault()})}
 const panelOpen=()=>{const p=$('hu-panel');return !!p&&!p.classList.contains('hidden')};
 function setBtn(txt){const b2=$('v3d-enter');$('v3d-act').classList.add('hidden');$('v3d-dz').classList.add('hidden');b2.textContent=txt||'';b2.classList.toggle('hidden',!txt)}
@@ -3484,40 +3486,56 @@ function topOf(rows,key){const mx=Math.max(0,...rows.map(r=>r[key]));return{mx,n
 function resultBlock(names,res,startAt){const rows=standings(names,res,startAt+DUR*1000),tk=topOf(rows,'k'),td=topOf(rows,'d');
   return`<div class=hur><span>🏹 Thợ săn giỏi nhất</span><b>${tk.mx>0?esc(tk.names.join(', '))+' · '+tk.mx+' con':'Chưa ai hạ được Ma Sói'}</b></div><div class=hur><span>💀 Bị cắn nhiều nhất</span><b>${td.mx>0?esc(td.names.join(', '))+' · '+td.mx+' lần':'Không ai bị cắn 🎉'}</b></div><div class=hut>Bảng xếp hạng</div>`+rows.map((r,i)=>`<div class=hur><span>${i+1}. ${r.n===me()?'<b>'+esc(r.n)+'</b>':esc(r.n)}</span><span>🐺 ${r.k} · 💀 ${r.d}</span></div>`).join('')}
 const RULES='Rừng đêm đầy Ma Sói! Mỗi thợ săn có một khẩu <b>súng săn 2 nòng</b>. Ma Sói bất ngờ lao ra từ bụi cây — ai bị cắn sẽ gục ngay tại chỗ và <b>hồi sinh sau 5 giây</b> cũng tại đó. Trong <b>2 phút</b>, ai hạ được nhiều Ma Sói nhất? Ai bị cắn nhiều nhất?';
-const RULES_JET='Mỗi phi công lái một <b>máy bay phản lực</b>. Máy bay địch liên tục xuất kích từ một <b>tàu sân bay</b> để săn bạn và <b>ném bom hòn đảo</b>. Hãy bắn hạ chúng, bay ra xa và <b>đánh chìm cả tàu sân bay (rất khỏe!) lẫn 3 tàu khu trục hộ tống</b> để giành chiến thắng. Cẩn thận: tàu sân bay và các <b>tàu khu trục hộ tống</b> đều có <b>pháo phòng không</b> (tàu khu trục có thể bị đánh chìm) — đừng quần thảo trong tầm bắn của chúng quá lâu. Không có thời gian bất tử: bị bắn hạ là hồi sinh sau 5 giây. Bạn có <b>pháo</b>, <b>tên lửa tự dẫn</b> và <b>pháo sáng</b> để đánh lạc hướng tên lửa địch. Đảo bị phá hủy hoặc hết 8 phút là thua. Bị bắn hạ thì hồi sinh sau 5 giây.';
+const RULES_JET='Mỗi phi công lái một <b>máy bay phản lực</b>. Máy bay địch liên tục xuất kích từ một <b>tàu sân bay</b> để săn bạn và <b>ném bom hòn đảo</b>. Hãy bắn hạ chúng, bay ra xa và <b>đánh chìm cả tàu sân bay (rất khỏe!) lẫn 3 tàu khu trục hộ tống</b> để giành chiến thắng. Cẩn thận: tàu sân bay và các <b>tàu khu trục hộ tống</b> đều có <b>pháo phòng không</b> (tàu khu trục có thể bị đánh chìm) — đừng quần thảo trong tầm bắn của chúng quá lâu. Bạn có <b>pháo</b>, <b>tên lửa tự dẫn</b> và <b>pháo sáng</b> để đánh lạc hướng tên lửa địch. Đảo bị phá hủy hoặc hết 8 phút là thua. Bị bắn hạ thì hồi sinh sau 5 giây (không có thời gian bất tử).';
+const RULES_TEAM='Hai đội <b>Xanh</b> và <b>Đỏ</b> (tối đa <b>3 đấu 3</b>) không chiến trên bầu trời quanh hòn đảo trong <b>8 phút</b>. Mỗi lần bắn hạ một phi công đội bạn đối phương được 1 điểm — hết giờ, đội nhiều điểm hơn giành chiến thắng. Không gây sát thương cho đồng đội. Bị bắn hạ thì hồi sinh sau 5 giây (không bất tử). Có thêm <b>xoay vòng</b> (né đạn pháo) và <b>bứt tốc</b>.';
+const RULES_SLAYER='Mỗi phi công chiến đấu một mình (tối đa <b>6 người</b>) trong <b>8 phút</b>. Ai bắn hạ được nhiều đối thủ nhất khi hết giờ sẽ thắng. Bị bắn hạ thì hồi sinh sau 5 giây (không bất tử). Có thêm <b>xoay vòng</b> (né đạn pháo) và <b>bứt tốc</b>.';
 const HOW_WOLF='WASD / joystick: di chuyển · di chuột (nhấp để khóa chuột) hoặc kéo để ngắm · <b>Space / X / nhấp chuột / chạm / nút 🔫</b>: bắn · R: nạp đạn · Hết 2 viên sẽ tự nạp. Tối đa '+MAXP+' thợ săn, miễn phí.';
 const HOW_JET='Di chuột (nhấp để khóa chuột) hoặc kéo / joystick để lái · W/S: tăng/giảm ga · A/D: rẽ · <b>Chuột trái / Space</b>: bắn pháo · <b>Chuột phải / X</b>: tên lửa (tầm bắn 500, ngắm vào địch để khóa mục tiêu) · <b>F / C</b>: pháo sáng · Tối đa '+MAXP+' phi công, miễn phí.';
-const GM={wolf:{ico:'🐺',title:'Săn Ma Sói',rules:RULES,how:HOW_WOLF,create:'➕ Tạo phòng săn của tôi',start:'🌙 Bắt đầu cuộc săn',run:'Cuộc săn đang diễn ra…',time:DUR},jet:{ico:'✈️',title:'Phòng Thủ Đảo',rules:RULES_JET,how:HOW_JET,create:'➕ Tạo phi đội của tôi',start:'🛫 Cất cánh!',run:'Trận không chiến đang diễn ra…',time:JDUR}};
-function lobbyHTML(){const gm=GM[G],l=Object.entries(roomsBy[G]||{}).map(([id,r])=>{const n=Object.keys(r.players||{}).length,can=r.status==='waiting'&&n<MAXP;return`<div class=hur><span>${gm.ico} <b>${esc(r.host)}</b> · ${n}/${MAXP} · ${r.status==='waiting'?'Đang chờ':r.status==='done'?'Vừa kết thúc':'Đang chơi'}</span><button class=hub data-a=join data-v="${id}" ${can?'':'disabled'}>Tham gia</button></div>`}).join('')||'<div class=hum>Chưa có phòng nào. Hãy tạo phòng đầu tiên!</div>';
-  return`<h2>${gm.ico} ${gm.title}</h2><div class=hum>${gm.rules}</div><div class=hut>Cách chơi</div><div class=hum>${gm.how}</div><button class=hub data-a=create>${gm.create}</button><div class=hut>Phòng đang mở</div>${l}<button class=hub2 data-a=close>Đóng</button>`}
+const HOW_PVP='Di chuột (nhấp để khóa chuột) hoặc kéo / joystick để lái · W/S: ga · A/D: rẽ · <b>Chuột trái / Space</b>: bắn pháo · <b>Chuột phải / X</b>: tên lửa (tầm 500, ngắm vào đối thủ để khóa) · <b>F / C</b>: pháo sáng · <b>Q / E</b>: xoay vòng trái / phải (né đạn pháo) · <b>Shift</b>: bứt tốc (giữ) · trên điện thoại dùng nút 🔄 và ⚡. Miễn phí.';
+const isJet=g=>g==='jet'||g==='team'||g==='slayer',isPvp=g=>g==='team'||g==='slayer';
+const TEAMN={A:'🔵 Đội Xanh',B:'🔴 Đội Đỏ'},TEAMC={A:'#38bdf8',B:'#f87171'};
+const GM={wolf:{ico:'🐺',title:'Săn Ma Sói',rules:RULES,how:HOW_WOLF,create:'➕ Tạo phòng săn của tôi',start:'🌙 Bắt đầu cuộc săn',run:'Cuộc săn đang diễn ra…',time:DUR,max:5},
+  jet:{ico:'🤝',title:'Phòng Thủ Đảo · Hợp tác',rules:RULES_JET,how:HOW_JET,create:'➕ Tạo phi đội của tôi',start:'🛫 Cất cánh!',run:'Trận không chiến đang diễn ra…',time:JDUR,max:5},
+  team:{ico:'🛡️',title:'Phòng Thủ Đảo · Đấu đội 3v3',rules:RULES_TEAM,how:HOW_PVP,create:'➕ Tạo phòng đấu đội',start:'🛫 Cất cánh!',run:'Trận đấu đội đang diễn ra…',time:JDUR,max:6},
+  slayer:{ico:'💀',title:'Phòng Thủ Đảo · Slayer',rules:RULES_SLAYER,how:HOW_PVP,create:'➕ Tạo phòng Slayer',start:'🛫 Cất cánh!',run:'Trận Slayer đang diễn ra…',time:JDUR,max:6}};
+const jmenuHTML=()=>`<h2>✈️ Phòng Thủ Đảo</h2><div class=hum>Chọn chế độ chơi:</div><button class=hub data-a=mode data-v=jet>🤝 Hợp tác — bảo vệ đảo, đánh chìm hạm đội địch (tối đa 5 người)</button><button class=hub data-a=mode data-v=team>🛡️ Đấu đội — 3 đấu 3, 8 phút, có xoay vòng &amp; bứt tốc</button><button class=hub data-a=mode data-v=slayer>💀 Slayer — mỗi người một phe, tối đa 6 người, 8 phút, có xoay vòng &amp; bứt tốc</button><button class=hub2 data-a=close>Đóng</button>`;
+function lobbyHTML(){const gm=GM[G],l=Object.entries(roomsBy[G]||{}).map(([id,r])=>{const n=Object.keys(r.players||{}).length,can=r.status==='waiting'&&n<gm.max;return`<div class=hur><span>${gm.ico} <b>${esc(r.host)}</b> · ${n}/${gm.max} · ${r.status==='waiting'?'Đang chờ':r.status==='done'?'Vừa kết thúc':'Đang chơi'}</span><button class=hub data-a=join data-v="${id}" ${can?'':'disabled'}>Tham gia</button></div>`}).join('')||'<div class=hum>Chưa có phòng nào. Hãy tạo phòng đầu tiên!</div>';
+  return`<h2>${gm.ico} ${gm.title}</h2><div class=hum>${gm.rules}</div><div class=hut>Cách chơi</div><div class=hum>${gm.how}</div><button class=hub data-a=create>${gm.create}</button><div class=hut>Phòng đang mở</div>${l}`+(isJet(G)?'<button class=hub2 data-a=jmenu>⬅ Chọn chế độ khác</button>':'')+`<button class=hub2 data-a=close>Đóng</button>`}
 function roomHTML(){const r=room,gm=GM[G],ps=Object.entries(r.players||{}).sort((a,b)=>a[1].j-b[1].j),host=r.host===me(),mp=r.players[me()]||{},all=ps.length>0&&ps.every(([,p])=>p.ready),w=r.status==='waiting';
-  return`<h2>🚩 Phòng của ${esc(r.host)}</h2><div class=hum>${gm.ico} ${gm.title} · ${ps.length}/${MAXP} người · thời gian ${Math.round(gm.time/60)} phút</div>`+ps.map(([n,p])=>`<div class=hur><span>${n===r.host?'👑 ':''}<b>${esc(n)}</b></span><span>${p.ready?'✅ Sẵn sàng':'⏳ Chưa sẵn sàng'}</span></div>`).join('')
+  const row=([n,p])=>`<div class=hur><span>${n===r.host?'👑 ':''}<b>${esc(n)}</b></span><span>${p.ready?'✅ Sẵn sàng':'⏳ Chưa sẵn sàng'}</span></div>`;
+  let list;if(G==='team'){list=['A','B'].map(t=>{const m=ps.filter(([,p])=>(p.team||'A')===t);return`<div class=hut style="color:${TEAMC[t]}">${TEAMN[t]} (${m.length}/3)</div>`+(m.map(row).join('')||'<div class=hum>— trống —</div>')}).join('')+(w?'<button class=hub2 data-a=team>🔁 Đổi đội</button>':'')}else list=ps.map(row).join('');
+  return`<h2>🚩 Phòng của ${esc(r.host)}</h2><div class=hum>${gm.ico} ${gm.title} · ${ps.length}/${gm.max} người · thời gian ${Math.round(gm.time/60)} phút</div>`+list
   +(w?`<button class=hub data-a=ready>${mp.ready?'↩ Hủy sẵn sàng':'✅ Sẵn sàng'}</button>`:'')+(host&&w?`<button class=hub data-a=start ${all?'':'disabled'}>${gm.start}</button>`:'')+(w&&!host?'<div class=hum style="margin-top:8px">Chờ chủ phòng bắt đầu khi mọi người sẵn sàng…</div>':'')
-  +(r.status==='done'?`<div class=hut>Kết quả ván vừa rồi</div>`+(G==='jet'?jetResultBlock(r):resultBlock(r.order||ps.map(p=>p[0]),r.res,r.startAt))+(host?'<button class=hub data-a=reopen>🔄 Mở lại phòng chờ</button>':'<div class=hum style="margin-top:8px">Chờ chủ phòng mở lại phòng chờ…</div>'):'')+(r.status==='countdown'?`<div class=hum>${gm.run}</div>`:'')+`<button class=hub2 data-a=leave>Rời phòng</button>`}
-function resultHTML(){const r=room;if(G==='jet'){const win=r&&r.outcome&&r.outcome.r==='win';return`<h2>${win?'🏆 Chiến thắng!':'💥 Thất bại'}</h2><div class=hum>Trận Phòng Thủ Đảo đã kết thúc.</div>`+(r?jetResultBlock(r):'')+`<button class=hub data-a=back>Về phòng chờ</button>`}
+  +(r.status==='done'?`<div class=hut>Kết quả ván vừa rồi</div>`+(isPvp(G)?pvpResultBlock(r):G==='jet'?jetResultBlock(r):resultBlock(r.order||ps.map(p=>p[0]),r.res,r.startAt))+(host?'<button class=hub data-a=reopen>🔄 Mở lại phòng chờ</button>':'<div class=hum style="margin-top:8px">Chờ chủ phòng mở lại phòng chờ…</div>'):'')+(r.status==='countdown'?`<div class=hum>${gm.run}</div>`:'')+`<button class=hub2 data-a=leave>Rời phòng</button>`}
+function resultHTML(){const r=room;
+  if(isPvp(G)){return`<h2>🏁 Hết giờ!</h2><div class=hum>${GM[G].title} đã kết thúc.</div>`+(r?pvpResultBlock(r):'')+`<button class=hub data-a=back>Về phòng chờ</button>`}
+  if(G==='jet'){const win=r&&r.outcome&&r.outcome.r==='win';return`<h2>${win?'🏆 Chiến thắng!':'💥 Thất bại'}</h2><div class=hum>Trận Phòng Thủ Đảo đã kết thúc.</div>`+(r?jetResultBlock(r):'')+`<button class=hub data-a=back>Về phòng chờ</button>`}
   return`<h2>🏁 Hết giờ!</h2><div class=hum>Cuộc săn Ma Sói đã kết thúc.</div>`+(r?resultBlock(r.order||[],r.res,r.startAt):'')+`<button class=hub data-a=back>Về phòng chờ</button>`}
 let lastHTML='';
-function render(){const p=$('hu-panel');if(!p)return;if(view==null||view==='match'){p.classList.add('hidden');lastHTML='';return}p.classList.remove('hidden');const h='<div class=huc>'+(view==='room'&&room?roomHTML():view==='result'?resultHTML():lobbyHTML())+'</div>';if(h!==lastHTML){lastHTML=h;p.innerHTML=h}}
+function render(){const p=$('hu-panel');if(!p)return;if(view==null||view==='match'){p.classList.add('hidden');lastHTML='';return}p.classList.remove('hidden');const h='<div class=huc>'+(view==='jmenu'?jmenuHTML():view==='room'&&room?roomHTML():view==='result'?resultHTML():lobbyHTML())+'</div>';if(h!==lastHTML){lastHTML=h;p.innerHTML=h}}
 function click(e){const a=e.target.closest('[data-a]');if(!a||a.disabled)return;auInit();const f=ACT[a.dataset.a];f&&f(a.dataset.v)}
 // ============================ PHÒNG CHƠI (Firebase) ============================
-const ACT={close(){view=null;render()},create,join,ready:ready_,start,leave:leaveRoom,reopen,back(){if(AR)endMatch(true);if(JT)endJet(true);view=room?'room':'lobby';render()}};
+const ACT={close(){view=null;render()},create,join,ready:ready_,start,leave:leaveRoom,reopen,mode(g){openLobby(g)},jmenu(){view='jmenu';render()},team:changeTeam,back(){if(AR)endMatch(true);if(JT)endJet(true);view=room?'room':'lobby';render()}};
 function openLobby(g){if(!db||!session)return;init();auInit();G=g||'wolf';base=bases[G];view='lobby';render()}
+function openJetMenu(){if(!db||!session)return;init();auInit();view='jmenu';render()}
 function bind(id){roomId=id;roomRef=base.child(id);roomRef.on('value',onRoom);view='room';render()}
-function create(){const id=base.push().key,ref=base.child(id);ref.set({host:me(),status:'waiting',seed:Math.floor(Math.random()*1e9),players:{[me()]:{ready:false,j:Date.now()}}});ref.child('players/'+me()).onDisconnect().remove();bind(id)}
-function join(id){base.child(id).transaction(r=>{if(!r||r.status!=='waiting')return;r.players=r.players||{};if(r.players[me()]||Object.keys(r.players).length>=MAXP)return;r.players[me()]={ready:false,j:Date.now()};return r},(e,c)=>{if(c){base.child(id+'/players/'+me()).onDisconnect().remove();bind(id)}else showToast('Không vào được phòng (đầy hoặc đã bắt đầu)','#ef4444')})}
+function create(){const id=base.push().key,ref=base.child(id);ref.set({host:me(),status:'waiting',seed:Math.floor(Math.random()*1e9),players:{[me()]:{ready:false,j:Date.now(),team:'A'}}});ref.child('players/'+me()).onDisconnect().remove();bind(id)}
+function join(id){const max=GM[G].max;base.child(id).transaction(r=>{if(!r||r.status!=='waiting')return;r.players=r.players||{};const ks=Object.keys(r.players);if(r.players[me()]||ks.length>=max)return;let nA=0,nB=0;ks.forEach(k=>{(r.players[k].team||'A')==='A'?nA++:nB++});const tm=nA<=nB?'A':'B';if(G==='team'&&(tm==='A'?nA:nB)>=3)return;r.players[me()]={ready:false,j:Date.now(),team:tm};return r},(e,c)=>{if(c){base.child(id+'/players/'+me()).onDisconnect().remove();bind(id)}else showToast('Không vào được phòng (đầy hoặc đã bắt đầu)','#ef4444')})}
 function ready_(){const p=room&&room.players[me()];if(p)roomRef.child('players/'+me()+'/ready').set(!p.ready)}
-const CLR={wolves:null,res:null,live:null,shots:null,enemies:null,emis:null,pm:null,fl:null,cdmg:null,idmg:null,ddmg:null,deaths:null,outcome:null};
-function start(){if(!room||room.host!==me())return;const ps=Object.entries(room.players).sort((a,b)=>a[1].j-b[1].j);if(!ps.every(([,p])=>p.ready))return;roomRef.update(Object.assign({status:'countdown',startAt:now()+LEAD,order:ps.map(p=>p[0]),seed:Math.floor(Math.random()*1e9)},CLR))}
+function changeTeam(){const r=room;if(!r||r.status!=='waiting')return;const mine=(r.players[me()]||{}).team||'A',to=mine==='A'?'B':'A',cnt=Object.values(r.players).filter(p=>(p.team||'A')===to).length;if(cnt>=3){showToast('Đội kia đã đủ 3 người','#f59e0b');return}roomRef.child('players/'+me()+'/team').set(to)}
+const CLR={wolves:null,res:null,live:null,shots:null,enemies:null,emis:null,pm:null,fl:null,cdmg:null,idmg:null,ddmg:null,deaths:null,outcome:null,kd:null,teams:null};
+function start(){if(!room||room.host!==me())return;const ps=Object.entries(room.players).sort((a,b)=>a[1].j-b[1].j);if(!ps.every(([,p])=>p.ready))return;const u=Object.assign({status:'countdown',startAt:now()+LEAD,order:ps.map(p=>p[0]),seed:Math.floor(Math.random()*1e9)},CLR);if(G==='team'){u.teams={};ps.forEach(([n,p])=>u.teams[n]=p.team||'A')}roomRef.update(u)}
 function reopen(){const u=Object.assign({status:'waiting',startAt:null,order:null},CLR);for(const n in room.players)u['players/'+n+'/ready']=false;roomRef.update(u)}
 function leaveRoom(){if(AR)endMatch(true);if(JT)endJet(true);if(roomRef){const r=room,pr=roomRef.child('players/'+me());roomRef.off();pr.onDisconnect().cancel();pr.remove();if(r&&r.host===me()){const rest=Object.entries(r.players||{}).filter(([n])=>n!==me()).sort((a,b)=>a[1].j-b[1].j);if(rest.length)roomRef.child('host').set(rest[0][0]);else roomRef.remove()}}roomRef=null;room=null;roomId=null;view=loc?'lobby':null;render()}
 function onRoom(s){const r=s.val();
   if(!r){if(AR)endMatch(true);if(JT)endJet(true);if(roomRef){roomRef.off();roomRef=null}room=null;if(view){view='lobby';showToast('Phòng đã đóng','#f59e0b')}render();return}
   if(!r.players||!r.players[me()]){room=null;if(AR)endMatch(true);if(JT)endJet(true);if(roomRef){roomRef.off();roomRef=null}if(view)view='lobby';render();return}
   room=r;if(!r.players[r.host]){const f=Object.entries(r.players).sort((a,b)=>a[1].j-b[1].j)[0];if(f&&f[0]===me())roomRef.child('host').set(me())}
-  if(r.status==='countdown'&&!AR&&!JT&&loc==='gr'&&playedKey!==roomId+'|'+r.startAt){if(G==='jet')startJet();else startMatch()}
+  if(r.status==='countdown'&&!AR&&!JT&&loc==='gr'&&playedKey!==roomId+'|'+r.startAt){if(isJet(G))startJet();else startMatch()}
   else if(r.status==='waiting'&&((AR&&!AR.over)||(JT&&!JT.over))){if(AR)endMatch(true);if(JT)endJet(true);view='room'}
   render()}
 function quitMatch(){if(AR)endMatch(true);if(JT)endJet(true);if(roomRef)leaveRoom();view=null;render()}
+
 // ============================ PHÒNG GAME (nội thất) ============================
 function mkTex(w,h,fn){const c=document.createElement('canvas');c.width=w;c.height=h;fn(c.getContext('2d'),w,h);return new T.CanvasTexture(c)}
 function signT(t,bg,fg,w,h,f){return mkTex(w,h,(x)=>{x.fillStyle=bg;x.fillRect(0,0,w,h);x.strokeStyle=fg;x.lineWidth=8;x.strokeRect(6,6,w-12,h-12);x.fillStyle=fg;x.font='bold '+f+'px DM Sans,Arial';x.textAlign='center';x.textBaseline='middle';x.fillText(t,w/2,h/2)})}
@@ -3585,7 +3603,7 @@ function toGR(first,gate){loc='gr';V.mode='hunt';V.inH={sx:V.GRD[0]-1.2,sz:V.GRD
 function enter(){if(loc||!V.hero||!db||!session)return;init();auInit();T=V.T;texInit();const h=V.hero;saved={t:V.tmode};buildGR();toGR(true)}
 function leaveGR(){if(!loc)return;if(roomRef)leaveRoom();view=null;render();glStop();if(GR)GR.g.visible=false;const h=V.hero;h.rotation.set(0,0,0);h.rotation.order='XYZ';h.scale.setScalar(1);h.visible=true;h.position.set(V.GRD[0]-1.0,.2,V.GRD[1]);h.rotation.y=-Math.PI/2;V.camS.yaw=Math.PI/2;V.camS.pitch=.5;
   V.setTmode(saved?saved.t:0);V.mode='out';loc=null;V.scene.fog.near=90;V.scene.fog.far=330;V.cam.fov=55;V.cam.near=.3;V.cam.updateProjectionMatrix();V.cam.position.set(h.position.x-8,6,h.position.z);const tb=$('v3d-time');if(tb)tb.style.display='';hudMode(null);windOff();setBtn('')}
-function interact(){if(panelOpen())return;if(loc==='sky'){jFlare();return}if(loc!=='gr')return;if(GR.near==='p')openLobby('wolf');else if(GR.near==='j')openLobby('jet');else if(GR.near==='e')leaveGR();else showToast('Tới cổng 🐺 Săn Ma Sói (bên phải) hoặc ✈️ Phòng Thủ Đảo (phía nam) để chơi, hoặc lối ra (bên trái)','#f59e0b')}
+function interact(){if(panelOpen())return;if(loc==='sky'){jFlare();return}if(loc!=='gr')return;if(GR.near==='p')openLobby('wolf');else if(GR.near==='j')openJetMenu();else if(GR.near==='e')leaveGR();else showToast('Tới cổng 🐺 Săn Ma Sói (bên phải) hoặc ✈️ Phòng Thủ Đảo (phía nam) để chơi, hoặc lối ra (bên trái)','#f59e0b')}
 // ============================ ĐẤU TRƯỜNG RỪNG ĐÊM ============================
 let EYEG=null,EYEM=null;
 function mkRng(seed){let s=seed|0;return()=>{s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -3742,10 +3760,10 @@ function endMatch(back){const A=AR;if(!A)return;AR=null;windOff();try{A.refs.w.o
   V.scene.fog.near=90;V.scene.fog.far=330;V.cam.fov=55;V.cam.near=.3;V.cam.updateProjectionMatrix();
   if(back&&loc==='arena')toGR(false);else if(loc==='arena')loc='gr'}
 // ============================ PHÒNG THỦ ĐẢO (máy bay phản lực) ============================
-const CAR={x:-1080,z:-170,h:Math.PI/2},JLIM=1900,DES=[[-190,140],[190,140],[0,-260]],jIn={mg:0,mm:0,bg:0,bm:0,bf:0};
+const CAR={x:-1080,z:-170,h:Math.PI/2},JLIM=1900,DES=[[-190,140],[190,140],[0,-260]],jIn={mg:0,mm:0,bg:0,bm:0,bf:0,br:0,bb:0};
 const carW=(lx,ly,lz)=>{const c=Math.cos(CAR.h),s=Math.sin(CAR.h);return[CAR.x+lx*c+lz*s,ly,CAR.z-lx*s+lz*c]};
 const carL=(x,z)=>{const dx=x-CAR.x,dz=z-CAR.z,c=Math.cos(CAR.h),s=Math.sin(CAR.h);return[dx*c-dz*s,dx*s+dz*c]};
-const inCar=(x,y,z)=>{if(y>32||y<-8)return false;const l=carL(x,z);return Math.abs(l[0])<18&&Math.abs(l[1])<70};
+const inCar=(x,y,z)=>{if(JT&&JT.pvp)return false;if(y>32||y<-8)return false;const l=carL(x,z);return Math.abs(l[0])<18&&Math.abs(l[1])<70};
 const shipLocal=(s,x,z)=>{const dx=x-s.x,dz=z-s.z,c=Math.cos(s.h),sn=Math.sin(s.h);return[dx*c-dz*sn,dx*sn+dz*c]};
 const inShipBox=(s,x,y,z)=>{if(y>s.ht||y<-8)return false;const l=shipLocal(s,x,z);return Math.abs(l[0])<s.hw&&Math.abs(l[1])<s.hl};
 const DHP=800,ISLHP=50;
@@ -3756,6 +3774,12 @@ const shipWorld=(s,lx,ly,lz)=>{const c=Math.cos(s.h),sn=Math.sin(s.h);return[s.x
 const terrH=(x,z)=>{const r=Math.hypot(x,z);return r<78?14:r<112?14*(1-(r-78)/34):0};
 const hsh=s=>{let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return((h^h>>>15)>>>0)/4294967296};
 const fwd=(yaw,pit)=>[Math.sin(yaw)*Math.cos(pit),Math.sin(pit),Math.cos(yaw)*Math.cos(pit)];
+const sameT=(a,b)=>!!JT&&JT.tmode==='team'&&JT.teams[a]!==undefined&&JT.teams[a]===JT.teams[b],sameTeam=n=>sameT(n,me());
+const jetCol=n=>G==='team'&&JT&&JT.teams[n]?parseInt(TEAMC[JT.teams[n]].slice(1),16):V.hue(n);
+function jetSpawnPos(r,rand){const order=r.order||Object.keys(r.players),N=order.length,slot=Math.max(0,order.indexOf(me())),team=(r.teams||{})[me()];
+  if(G==='team'){const mates=order.filter(n=>(r.teams||{})[n]===team),idx=Math.max(0,mates.indexOf(me())),side=team==='B'?1:-1;return{x:side*300+(rand?rr(-60,60):0),y:150+(rand?rr(0,80):0),z:(idx-(mates.length-1)/2)*80+(rand?rr(-80,80):0),yaw:side>0?-Math.PI/2:Math.PI/2}}
+  if(G==='slayer'){const a=rand?Math.random()*6.283:slot/Math.max(1,N)*6.283,R=rand?rr(300,380):320,x=Math.cos(a)*R,z=Math.sin(a)*R;return{x,y:150+(rand?rr(0,80):0),z,yaw:Math.atan2(-x,-z)}}
+  return{x:-60,y:140,z:(slot-(N-1)/2)*90,yaw:-Math.PI/2}}
 const ownerPos=n=>{const J=JT;return n===me()?J.me:(J.oth[n]&&J.oth[n].a?J.oth[n]:null)};
 function jspat(x,y,z){const J=JT;if(!J||!J.cam)return[1,0];const c=J.cam,dx=JX+x-c.px,dy=y-c.py,dz=z-c.pz,d=Math.hypot(dx,dy,dz)||1;return[clamp(1.4/(1+d/300),0,1),clamp((dx*c.rx+dy*c.ry+dz*c.rz)/d*.85,-1,1)]}
 // ---- mô hình ----
@@ -3790,23 +3814,23 @@ function buildSky(r){texInit();const{bx,cy,sp,put,mat}=V,rnd=mkRng(r.seed),g=new
   const tp=[];for(let i=0,tr=0;i<80&&tr<600;tr++){const a=rnd()*6.283,d=18+rnd()*58,x=Math.cos(a)*d,z=Math.sin(a)*d;if(Math.abs(z-18)<14&&Math.abs(x)<84)continue;if(Math.abs(x+40)<22&&Math.abs(z+30)<14)continue;if(Math.hypot(x-30,z+26)<10||Math.hypot(x-55,z+12)<8)continue;tp.push({x,z,s:1+rnd()*.9});i++}
   const NT=tp.length,tr1=new T.InstancedMesh(new T.CylinderGeometry(.5,.7,5,6),mat(0x6b4a2b),NT),tr2=new T.InstancedMesh(new T.ConeGeometry(4,10,7),mat(0x2e7d3a),NT),dd=new T.Object3D();
   tp.forEach((t,i)=>{dd.rotation.set(0,rnd()*6,0);dd.scale.setScalar(t.s);dd.position.set(t.x,16.5*1+(t.s-1)*2.5,t.z);dd.updateMatrix();tr1.setMatrixAt(i,dd.matrix);dd.position.set(t.x,21.5+(t.s-1)*5,t.z);dd.updateMatrix();tr2.setMatrixAt(i,dd.matrix)});isl.add(tr1);isl.add(tr2);
-  const car=mkCarrier();car.g.position.set(CAR.x,0,CAR.z);car.g.rotation.y=CAR.h;g.add(car.g);
-  const ships=[{id:'car',x:CAR.x,z:CAR.z,h:CAR.h,hl:70,hw:18,ht:32,g:car.g,rad:car.rad,ph:0}];
+  const pvp=isPvp(G);let car={g:new T.Group(),rad:new T.Group()};const ships=[],aa=[];if(!pvp){car=mkCarrier();car.g.position.set(CAR.x,0,CAR.z);car.g.rotation.y=CAR.h;g.add(car.g);
+  ships.push({id:'car',x:CAR.x,z:CAR.z,h:CAR.h,hl:70,hw:18,ht:32,g:car.g,rad:car.rad,ph:0});
   DES.forEach(([lx,lz],i)=>{const dd=mkDestroyer(),p=carW(lx,0,lz);dd.g.position.set(p[0],0,p[2]);dd.g.rotation.y=CAR.h;g.add(dd.g);ships.push({id:'d'+i,x:p[0],z:p[2],h:CAR.h,hl:34,hw:7,ht:20,g:dd.g,rad:dd.rad,ph:i*1.7+1})});
-  const aa=[],mount={car:[[14,15.5,40],[14,15.5,-50],[-12,15.5,-50],[-12,15.5,40],[-20,24,-10]],d:[[-3.2,10,8],[3.2,10,-14]]};
-  ships.forEach((s,si)=>(s.id==='car'?mount.car:mount.d).forEach((p,bi)=>aa.push({id:s.id+bi,ship:s,p,iv:2.4+((si+bi)%4)*.45,ph:((si*7+bi*3)%10)*.31,last:-1,rng:700})));
-  const N=Math.max(1,(r.order||Object.keys(r.players)).length),order=r.order||Object.keys(r.players),slot=Math.max(0,order.indexOf(me())),hpMax=4500+1500*(N-1);
-  JT={g,disp,tex:[],wt,car:car.g,crad:car.rad,irad,ships,aa,aaD:1e9,aaHit:0,aaShots:0,t:-LEAD/1000,over:false,shown:false,oc:0,sink:null,sinkSeen:false,out:null,outAt:0,N,hpMax,
-    me:{x:-60,y:140,z:(slot-(N-1)/2)*90,yaw:-Math.PI/2,pit:0,roll:0,spd:85,thr:.4,hp:100,st:'a',dieAt:0,inv:0,mis:4,misT:0,fl:8,flT:0,cd:0,heat:0,ovh:0,lock:null,fire:false,g:null},
+  const mount={car:[[14,15.5,40],[14,15.5,-50],[-12,15.5,-50],[-12,15.5,40],[-20,24,-10]],d:[[-3.2,10,8],[3.2,10,-14]]};
+  ships.forEach((s,si)=>(s.id==='car'?mount.car:mount.d).forEach((p,bi)=>aa.push({id:s.id+bi,ship:s,p,iv:2.4+((si+bi)%4)*.45,ph:((si*7+bi*3)%10)*.31,last:-1,rng:700})))}
+  const N=Math.max(1,(r.order||Object.keys(r.players)).length),order=r.order||Object.keys(r.players),slot=Math.max(0,order.indexOf(me())),hpMax=4500+1500*(N-1),sp0=jetSpawnPos(r,false);
+  JT={g,disp,tex:[],wt,car:car.g,crad:car.rad,irad,ships,aa,pvp,tmode:G,teams:r.teams||{},lim:pvp?1100:JLIM,byK:{},lastK:0,noteMsg:'',aaD:1e9,aaHit:0,aaShots:0,t:-LEAD/1000,over:false,shown:false,oc:0,sink:null,sinkSeen:false,out:null,outAt:0,N,hpMax,
+    me:{x:sp0.x,y:sp0.y,z:sp0.z,yaw:sp0.yaw,pit:0,roll:0,rollT:0,rollD:1,rollAdd:0,rollCd:0,boostE:100,boosting:false,wasB:false,lastHit:null,spd:85,thr:.4,hp:100,st:'a',dieAt:0,inv:0,mis:4,misT:0,fl:8,flT:0,cd:0,heat:0,ovh:0,lock:null,fire:false,g:null},
     oth:{},en:{},ms:[],fls:[],tm:[],resSeen:{},resPend:{},sn:0,nM:0,nF:0,pmSeen:null,flSeen:null,cdLocal:0,cdSent:0,idLocal:0,idSent:0,dLocal:{d0:0,d1:0,d2:0},dSent:'',deaths:0,sent:0,warnD:1e9,nextF:3.5,nextB:30,hu:0,shake:0,msg:'',msgT:0,noteT:0,lb:99,go:0,pk:{m:0,f:0},gn:0,wp:0,smk:0,cam:null,cv:null,cx:null};
-  const J=JT,m=J.me,h=V.hero;m.g=mkJet(V.hue(me()),0);m.g.position.set(m.x,m.y,m.z);g.add(m.g);
+  const J=JT,m=J.me,h=V.hero;m.g=mkJet(jetCol(me()),0);m.g.position.set(m.x,m.y,m.z);g.add(m.g);
   glStop();if(GR)GR.g.visible=false;loc='sky';V.mode='hunt';V.inH={sx:V.GRD[0]-1.2,sz:V.GRD[1],ry:Math.PI/2};V.setTmode(1);
   h.visible=false;h.rotation.order='YXZ';h.scale.setScalar(1);V.camS.yaw=m.yaw-Math.PI;V.camS.fp=0;V.camS.pitch=.5;J.rel=0;J.lcs=V.camS.yaw;
   V.scene.fog.near=500;V.scene.fog.far=3000;V.cam.fov=68;V.cam.near=1.5;V.cam.far=3400;V.cam.updateProjectionMatrix();h.position.set(JX+m.x,m.y,m.z);V.cam.position.set(JX+m.x+100,m.y+10,m.z);
   const rf=roomRef;J.refs={en:rf.child('enemies'),em:rf.child('emis'),pm:rf.child('pm'),fl:rf.child('fl'),lv:rf.child('live'),rs:rf.child('res')};
   J.refs.en.on('child_added',s=>addEnemy(s.key,s.val()));J.refs.em.on('child_added',s=>spawnEM(s.key,s.val()));J.refs.pm.on('value',onPM);J.refs.fl.on('value',onFL);J.refs.lv.on('value',onJLive);J.refs.rs.on('value',s=>applyJRes(s.val()||{}));
   [J.refs.lv,J.refs.pm,J.refs.fl].forEach(rf2=>rf2.child(me()).onDisconnect().remove());
-  J.cv=$('jt-cv');J.cx=J.cv.getContext('2d');hudMode('jet');setBtn('');engOn();SFX.horn(.5)}
+  J.cv=$('jt-cv');J.cx=J.cv.getContext('2d');hudMode('jet');setBtn('');$('ju-rol').style.display=$('ju-bst').style.display=pvp?'':'none';engOn();if(!pvp)SFX.horn(.5)}
 // ---- địch ----
 function addEnemy(id,rec){const J=JT;if(!J||!rec||J.en[id]||J.sink!==null)return;if(now()-rec.at>2500)return;const sd=rec.sd||0,p=carW(((sd%7)-3)*3,15,-30+((sd>>3)%5)*12),g=mkJet(0,rec.r);g.position.set(p[0],p[1],p[2]);J.g.add(g);
   const e={id,owner:rec.tg,role:rec.r,x:p[0],y:p[1],z:p[2],yaw:CAR.h,pit:.15,roll:0,spd:62,hp:rec.r==='b'?16:7,st:'air',g,cd:rr(3,6),brk:0,bk:0,t:0,bombed:false,hits:{},claimed:false,sd,tt:0,kn:0};J.en[id]=e;const[v,pn]=jspat(e.x,e.y,e.z);SFX.jetpass(v,pn);if(J.resPend[id]){killEnemy(e,J.resPend[id].w);delete J.resPend[id]}}
@@ -3841,7 +3865,7 @@ function steer(m,tx,ty,tz,rate,dt){let dx=tx-m.x,dy=ty-m.y,dz=tz-m.z;const d=Mat
 function msEnd(ms,i,boom){const J=JT;if(boom){const[v,p]=jspat(ms.x,ms.y,ms.z);jboom(ms.x,ms.y,ms.z,.8);SFX.boomJ(v*.8,p)}J.g.remove(ms.g);J.ms.splice(i,1)}
 const _q0=()=>new T.Vector3(0,0,1);
 function msStep(ms,i,dt,nw){const J=JT,m=J.me;ms.t+=dt;ms.spd=Math.min(ms.max,ms.spd+90*dt);if(ms.k==='p')ms.trav+=ms.spd*dt;
-  if(ms.k==='p'){let tx=null;if(ms.tid==='car'&&J.sink===null){const c=carW(0,12,0);tx=c}else if(ms.tid&&/^d\d$/.test(ms.tid)){const sh=J.ships.find(q=>q.id===ms.tid);if(sh&&sh.sunk==null)tx=shipWorld(sh,0,10,0)}else if(ms.tid){const e=J.en[ms.tid];if(e&&e.st==='air')tx=[e.x,e.y,e.z]}
+  if(ms.k==='p'){let tx=null;if(ms.decoy&&ms.decoy.t<ms.decoy.life)tx=[ms.decoy.x,ms.decoy.y,ms.decoy.z];else if(ms.tid==='car'&&J.sink===null){const c=carW(0,12,0);tx=c}else if(ms.tid&&/^d\d$/.test(ms.tid)){const sh=J.ships.find(q=>q.id===ms.tid);if(sh&&sh.sunk==null)tx=shipWorld(sh,0,10,0)}else if(ms.tid){const e=J.en[ms.tid];if(e&&e.st==='air')tx=[e.x,e.y,e.z];else if(J.pvp){const p=ownerPos(ms.tid);if(p)tx=[p.x,p.y,p.z]}}
     if(tx)steer(ms,tx[0],tx[1],tx[2],ms.turn,dt)}
   else{let tx=null;if(ms.decoy&&ms.decoy.t<ms.decoy.life)tx=[ms.decoy.x,ms.decoy.y,ms.decoy.z];else{const p=ownerPos(ms.tg);if(p)tx=[p.x,p.y,p.z]}if(tx)steer(ms,tx[0],tx[1],tx[2],ms.turn,dt)}
   const ox=ms.x,oy=ms.y,oz=ms.z;ms.x+=ms.dx*ms.spd*dt;ms.y+=ms.dy*ms.spd*dt;ms.z+=ms.dz*ms.spd*dt;ms.g.position.set(ms.x,ms.y,ms.z);ms.g.quaternion.setFromUnitVectors(_q0(),new T.Vector3(ms.dx,ms.dy,ms.dz));
@@ -3851,6 +3875,9 @@ function msStep(ms,i,dt,nw){const J=JT,m=J.me;ms.t+=dt;ms.spd=Math.min(ms.max,ms
     for(const id in J.en){const e=J.en[id];if(e.st!=='air')continue;if(Math.hypot(e.x-ms.x,e.y-ms.y,e.z-ms.z)<(e.role==='b'?16:12)){if(ms.own)claimKill(e);end=1;break}}
     if(!end&&J.sink===null&&inCar(ms.x,ms.y,ms.z)){if(ms.own)J.cdLocal+=80;end=1}
     if(!end){const sd=destAt(ms.x,ms.y,ms.z);if(sd){if(ms.own)J.dLocal[sd.id]+=80;end=1}}
+    if(!end&&J.pvp){if(ms.decoy&&ms.decoy.t<ms.decoy.life){if(Math.hypot(ms.x-ms.decoy.x,ms.y-ms.decoy.y,ms.z-ms.decoy.z)<14)end=1}
+      else if(ms.by!==me()&&!sameTeam(ms.by)&&m.st==='a'&&Math.hypot(m.x-ms.x,m.y-ms.y,m.z-ms.z)<10){damageMe(50,ms.by);J.msg='💥 Trúng tên lửa của '+ms.by+'! Độ bền '+Math.max(0,Math.round(m.hp))+'%';J.msgT=1.6;end=1}
+      else for(const n in J.oth){const o=J.oth[n];if(n!==ms.by&&o.a&&!sameT(ms.by,n)&&Math.hypot(o.x-ms.x,o.y-ms.y,o.z-ms.z)<10){end=1;break}}}
   }else{
     if(ms.decoy&&ms.decoy.t<ms.decoy.life&&Math.hypot(ms.x-ms.decoy.x,ms.y-ms.decoy.y,ms.z-ms.decoy.z)<14)end=1;
     else{const p=ownerPos(ms.tg);if(p&&Math.hypot(p.x-ms.x,p.y-ms.y,p.z-ms.z)<10){if(ms.tg===me()&&!ms.decoy)hitMe();end=1}}
@@ -3861,7 +3888,7 @@ function jFlare(){const J=JT;if(!J||J.me.st!=='a'||J.over||J.me.fl<=0)return;con
   J.refs.fl.child(me()).set({n:J.nF,x:R1(m.x),y:R1(m.y),z:R1(m.z),dx:R2(f[0]),dy:R2(f[1]),dz:R2(f[2]),sp:R1(m.spd)});SFX.flare(.8,0)}
 function spawnFlares(id,x,y,z,f,sp,owner){const J=JT;for(let i=0;i<3;i++){const s=(i-1)*4.5,fl={id:id+'_'+i,owner,x:x-f[0]*6-f[2]*s*.3,y:y-f[1]*6-1,z:z-f[2]*6+f[0]*s*.3,vx:f[0]*sp*.35+(Math.random()-.5)*10-f[2]*s*.8,vy:-6+Math.random()*3,vz:f[2]*sp*.35+(Math.random()-.5)*10+f[0]*s*.8,t:0,life:4.5,g:null};
     const spr=new T.Sprite(new T.SpriteMaterial({map:glowTex,color:0xfff1b0,transparent:true,blending:T.AdditiveBlending,depthWrite:false}));spr.scale.set(6,6,1);spr.position.set(fl.x,fl.y,fl.z);J.g.add(spr);fl.g=spr;J.fls.push(fl);
-    if(i===0)J.ms.forEach(ms=>{if(ms.k==='e'&&ms.tg===owner&&!ms.decoy){const p=ownerPos(owner);if(p&&Math.hypot(ms.x-p.x,ms.y-p.y,ms.z-p.z)<1300&&hsh(fl.id+ms.id)<.75)ms.decoy=fl}})}}
+    if(i===0)J.ms.forEach(ms=>{if(((ms.k==='e'&&ms.tg===owner)||(ms.k==='p'&&ms.tid===owner))&&!ms.decoy){const p=ownerPos(owner);if(p&&Math.hypot(ms.x-p.x,ms.y-p.y,ms.z-p.z)<1300&&hsh(fl.id+ms.id)<.75)ms.decoy=fl}})}}
 function onFL(s){const J=JT;if(!J)return;const v=s.val()||{};if(J.flSeen===null){J.flSeen={};for(const n in v)J.flSeen[n]=v[n].n;return}for(const n in v){if(n===me()||J.flSeen[n]===v[n].n)continue;J.flSeen[n]=v[n].n;const d=v[n];spawnFlares(n+'_'+d.n,d.x,d.y,d.z,[d.dx,d.dy,d.dz],d.sp,n);const[vv,p]=jspat(d.x,d.y,d.z);SFX.flare(vv,p)}}
 function flareStep(fl,i,dt){const J=JT;fl.t+=dt;fl.vy-=7*dt;const dr=Math.max(0,1-.35*dt);fl.vx*=dr;fl.vz*=dr;fl.x+=fl.vx*dt;fl.y+=fl.vy*dt;fl.z+=fl.vz*dt;fl.g.position.set(fl.x,fl.y,fl.z);const k=fl.t/fl.life,sc=(6+Math.random()*2)*(1-k*.6);fl.g.scale.set(sc,sc,1);fl.g.material.opacity=1-k*k;
   if(Math.random()<dt*20)pt({x:fl.x,y:fl.y,z:fl.z,life:.9,s0:2,s1:5,a:.4,dr:.5,c:0xe8e8e8});if(fl.t>=fl.life||fl.y<1){J.g.remove(fl.g);fl.g.material.dispose();J.fls.splice(i,1)}}
@@ -3871,14 +3898,23 @@ function jboom(x,y,z,K){K=K||1;const R=Math.random;pt({x,y,z,life:.25,s0:10*K,s1
   for(let i=0;i<8;i++)pt({x:x+(R()-.5)*8*K,y:y+(R()-.5)*6*K,z:z+(R()-.5)*8*K,vy:5+R()*8,dr:.6,g:-1,life:2+R()*1.6,s0:9*K,s1:(26+R()*10)*K,a:.6,c:0x3a3a40});
   for(let i=0;i<18;i++){const a=R()*6.283,e=R()*1.3,u=(25+R()*60)*K;pt({x,y,z,vx:Math.cos(a)*Math.cos(e)*u,vy:Math.sin(e)*u,vz:Math.sin(a)*Math.cos(e)*u,g:30,dr:.3,life:.5+R()*.7,s0:1.4,s1:.3,a:1,add:1,c:0xffe08a})}}
 function sparkAt(x,y,z){for(let i=0;i<3;i++)pt({x,y,z,vx:rr(-12,12),vy:rr(-12,12),vz:rr(-12,12),dr:1,life:.35,s0:2.4,s1:.4,a:1,add:1,c:0xffd27a})}
-function jetDie(){const J=JT,m=J.me;if(m.st==='d')return;m.st='d';m.dieAt=now();m.hp=0;J.deaths++;roomRef.child('deaths/'+me()).set(J.deaths);jboom(m.x,m.y,m.z,2);SFX.boomJ(1,0);J.shake=1.6;m.fire=false;m.g.visible=false;J.msg='💥 Máy bay bị bắn hạ!';J.msgT=3}
-function jetRespawn(){const J=JT,m=J.me,a=Math.random()*6.283;m.x=Math.cos(a)*45;m.z=Math.sin(a)*45;m.y=150;m.yaw=-Math.PI/2;m.pit=0;m.roll=0;m.spd=85;m.thr=.4;m.hp=100;m.st='a';m.inv=0;m.mis=4;m.fl=8;m.heat=0;m.ovh=0;m.g.visible=true;V.camS.yaw=m.yaw-Math.PI;V.camS.fp=0;J.rel=0;J.lcs=V.camS.yaw;SFX.respawn()}
+function damageMe(amt,by){const J=JT,m=J.me;if(m.st!=='a'||J.over)return;m.hp-=amt;m.lastHit={by,t:J.t};J.shake=Math.max(J.shake,.5);if(m.hp<=0)jetDie()}
+function jetDie(){const J=JT,m=J.me;if(m.st==='d')return;m.st='d';m.dieAt=now();m.hp=0;J.deaths++;roomRef.child('deaths/'+me()).set(J.deaths);let by=null;
+  if(J.pvp){by=m.lastHit&&J.t-m.lastHit.t<8?m.lastHit.by:null;if(by)J.byK[by]=(J.byK[by]||0)+1;roomRef.child('kd/'+me()).set({d:J.deaths,k:J.byK})}
+  jboom(m.x,m.y,m.z,2);SFX.boomJ(1,0);J.shake=1.6;m.fire=false;m.g.visible=false;J.msg=by?'💥 '+by+' đã bắn hạ bạn!':'💥 Máy bay bị bắn hạ!';J.msgT=3}
+function jetRespawn(){const J=JT,m=J.me;let sp;if(J.pvp)sp=jetSpawnPos(room,true);else{const a=Math.random()*6.283;sp={x:Math.cos(a)*45,y:150,z:Math.sin(a)*45,yaw:-Math.PI/2}}
+  m.x=sp.x;m.y=sp.y;m.z=sp.z;m.yaw=sp.yaw;m.pit=0;m.roll=0;m.rollAdd=0;m.rollT=0;m.rollCd=0;m.boostE=100;m.lastHit=null;m.spd=85;m.thr=.4;m.hp=100;m.st='a';m.inv=0;m.mis=4;m.fl=8;m.heat=0;m.ovh=0;m.g.visible=true;V.camS.yaw=m.yaw-Math.PI;V.camS.fp=0;J.rel=0;J.lcs=V.camS.yaw;SFX.respawn()}
 function jetFlight(dt,canAct){const J=JT,m=J.me,k=V.keys,cs=V.camS,j=V.joy;if(m.st!=='a')return;
   if(canAct){if(k.a||k.arrowleft)cs.yaw+=1.3*dt;if(k.d||k.arrowright)cs.yaw-=1.3*dt;if(k.arrowup)cs.fp=clamp(cs.fp-dt,-1.2,1.2);if(k.arrowdown)cs.fp=clamp(cs.fp+dt,-1.2,1.2);cs.yaw-=j.x*1.6*dt;cs.fp=clamp(cs.fp+j.y*1.1*dt,-1.2,1.2);if(k.w)m.thr=Math.min(1,m.thr+.55*dt);if(k.s)m.thr=Math.max(0,m.thr-.55*dt)}
-  m.oob=Math.hypot(m.x,m.z)>JLIM;if(m.oob)cs.yaw+=wrap(Math.atan2(-m.x,-m.z)-Math.PI-cs.yaw)*Math.min(1,dt*1.5);
+  m.oob=Math.hypot(m.x,m.z)>J.lim;if(m.oob)cs.yaw+=wrap(Math.atan2(-m.x,-m.z)-Math.PI-cs.yaw)*Math.min(1,dt*1.5);
   J.rel=clamp((J.rel||0)+(cs.yaw-(J.lcs===undefined?cs.yaw:J.lcs)),-.85,.85);let rp=-cs.fp-m.pit;if(Math.abs(rp)>.55){rp=clamp(rp,-.55,.55);cs.fp=clamp(-(m.pit+rp),-1.2,1.2)}
-  const dy=J.rel,ap=clamp(-cs.fp,-1.15,1.15),my=(1.35-.35*m.thr)*dt,tn=clamp(dy,-my,my);m.yaw=wrap(m.yaw+tn);J.rel-=tn;cs.yaw=m.yaw-Math.PI+J.rel;J.lcs=cs.yaw;m.pit+=clamp(ap-m.pit,-1.1*dt,1.1*dt);if(m.y>430&&m.pit>0)m.pit-=.8*dt;
-  m.roll+=((-clamp(dy*1.6,-1.1,1.1))-m.roll)*Math.min(1,dt*4);m.spd+=((55+80*m.thr)-m.spd)*Math.min(1,dt*.8);const f=fwd(m.yaw,m.pit);m.x+=f[0]*m.spd*dt;m.y+=f[1]*m.spd*dt;m.z+=f[2]*m.spd*dt;
+  const dy=J.rel,ap=clamp(-cs.fp,-1.15,1.15),my=(1.35-.35*m.thr)*dt*(m.boosting?.7:1),tn=clamp(dy,-my,my);m.yaw=wrap(m.yaw+tn);J.rel-=tn;cs.yaw=m.yaw-Math.PI+J.rel;J.lcs=cs.yaw;m.pit+=clamp(ap-m.pit,-1.1*dt,1.1*dt);if(m.y>430&&m.pit>0)m.pit-=.8*dt;
+  m.roll+=((-clamp(dy*1.6,-1.1,1.1))-m.roll)*Math.min(1,dt*4);let ts=55+80*m.thr;m.boosting=false;
+  if(J.pvp){const k2=V.keys,wantB=!!(k2.shift||jIn.bb)&&canAct;if(wantB&&m.boostE>(m.wasB?0:12)){m.boosting=true;m.boostE=Math.max(0,m.boostE-45*dt);ts=195}else m.boostE=Math.min(100,m.boostE+14*dt);if(m.boosting&&!m.wasB)SFX.boost(.8,0);m.wasB=m.boosting;
+    m.rollCd=Math.max(0,m.rollCd-dt);const rb=!!jIn.br,redge=rb&&!J.pk.r;J.pk.r=rb;
+    if(m.rollT<=0&&m.rollCd<=0&&canAct){const rq=k2.q?1:k2.e?-1:(redge?(m.roll<=0?1:-1):0);if(rq){m.rollT=.85;m.rollD=rq>0?1:-1;m.rollCd=3.5;SFX.roll(.7,0)}}
+    if(m.rollT>0){m.rollT-=dt;m.rollAdd+=-m.rollD*6.283/.85*dt;m.x+=Math.cos(m.yaw)*m.rollD*55*dt;m.z+=-Math.sin(m.yaw)*m.rollD*55*dt;if(m.rollT<=0){m.rollT=0;m.rollAdd=0}}}
+  m.spd+=(ts-m.spd)*Math.min(1,dt*(m.boosting?2.4:.8));const f=fwd(m.yaw,m.pit);m.x+=f[0]*m.spd*dt;m.y+=f[1]*m.spd*dt;m.z+=f[2]*m.spd*dt;
   if(m.y<3||m.y<terrH(m.x,m.z)+2||inCar(m.x,m.y,m.z)||inDest(m.x,m.y,m.z)){jetDie()}}
 function jetGun(){const J=JT,m=J.me,f=fwd(m.yaw,m.pit),sx=(Math.random()-.5)*.012,sy=(Math.random()-.5)*.012;let d=[f[0]+sx,f[1]+sy,f[2]+sx*.5];const n=Math.hypot(d[0],d[1],d[2]);d=[d[0]/n,d[1]/n,d[2]/n];const ox=m.x+f[0]*8,oy=m.y+f[1]*8,oz=m.z+f[2]*8;
   pt({x:ox,y:oy,z:oz,vx:d[0]*900+f[0]*0,vy:d[1]*900,vz:d[2]*900,life:.5,s0:2,s1:1.2,a:1,add:1,c:0xffe08a});if((J.gn=(J.gn+1)%2)===0)SFX.gun(.5,0);
@@ -3889,16 +3925,16 @@ function jetMissile(){const J=JT,m=J.me;if(m.mis<=0){SFX.empty();return}m.mis--;
   J.refs.pm.child(me()).set({n:J.nM,tid:tid||'',x:R1(m.x),y:R1(m.y),z:R1(m.z),dx:R2(f[0]),dy:R2(f[1]),dz:R2(f[2]),sp:R1(m.spd+70)})}
 function jetWeapons(dt,nw,t,canAct){const J=JT,m=J.me,k=V.keys;m.cd=Math.max(0,m.cd-dt);m.ovh=Math.max(0,m.ovh-dt);m.heat=Math.max(0,m.heat-dt*.35);
   if(m.mis<4){m.misT-=dt;if(m.misT<=0){m.mis++;m.misT=3.5}}if(m.fl<8){m.flT-=dt;if(m.flT<=0){m.fl++;m.flT=5}}
-  m.lock=null;if(m.st==='a'){const f=fwd(m.yaw,m.pit);let best=.38;const cand=[];for(const id in J.en){const e=J.en[id];if(e.st==='air')cand.push([id,e.x,e.y,e.z])}if(J.sink===null){const c=carW(0,12,0);cand.push(['car',c[0],c[1],c[2]])}for(const s of J.ships)if(s.id!=='car'&&s.sunk==null){const c=shipWorld(s,0,10,0);cand.push([s.id,c[0],c[1],c[2]])}
+  m.lock=null;if(m.st==='a'){const f=fwd(m.yaw,m.pit);let best=.38;const cand=[];for(const id in J.en){const e=J.en[id];if(e.st==='air')cand.push([id,e.x,e.y,e.z])}if(!J.pvp&&J.sink===null){const c=carW(0,12,0);cand.push(['car',c[0],c[1],c[2]])}if(J.pvp)for(const n in J.oth){const o=J.oth[n];if(o.a&&!sameTeam(n))cand.push([n,o.x,o.y,o.z])}for(const s of J.ships)if(s.id!=='car'&&s.sunk==null){const c=shipWorld(s,0,10,0);cand.push([s.id,c[0],c[1],c[2]])}
     for(const c of cand){const dx=c[1]-m.x,dy=c[2]-m.y,dz=c[3]-m.z,d=Math.hypot(dx,dy,dz);if(d<60||d>500)continue;const ang=Math.acos(clamp((dx*f[0]+dy*f[1]+dz*f[2])/d,-1,1));if(ang<best){best=ang;m.lock={id:c[0],x:c[1],y:c[2],z:c[3],d}}}}
   const wg=!!(k[' ']||jIn.mg||jIn.bg)&&canAct&&t>=0;if(wg&&m.cd<=0&&m.ovh<=0){m.cd=.083;m.heat+=.045;if(m.heat>1){m.ovh=1.6;m.heat=1.05;J.msg='🔥 Súng nóng quá!';J.msgT=1.2}jetGun()}m.fire=!!(wg&&m.ovh<=0);
-  const wm=!!(k.x||k.e||jIn.mm||jIn.bm)&&canAct&&t>=0;if(wm&&!J.pk.m)jetMissile();J.pk.m=wm;const wf=!!(k.c||jIn.bf)&&canAct;if(wf&&!J.pk.f)jFlare();J.pk.f=wf}
-function jetSpawns(t){const J=JT,m=J.me;if(J.over||J.sink!==null||m.st!=='a'||t<2)return;
+  const wm=!!(k.x||(!J.pvp&&k.e)||jIn.mm||jIn.bm)&&canAct&&t>=0;if(wm&&!J.pk.m)jetMissile();J.pk.m=wm;const wf=!!(k.c||jIn.bf)&&canAct;if(wf&&!J.pk.f)jFlare();J.pk.f=wf}
+function jetSpawns(t){const J=JT,m=J.me;if(J.pvp||J.over||J.sink!==null||m.st!=='a'||t<2)return;
   if(t>=J.nextF){let c=0;for(const id in J.en){const e=J.en[id];if(e.owner===me()&&e.role==='f'&&e.st==='air')c++}if(c<Math.min(4,2+Math.floor(t/140))){J.refs.en.child(me()+'_'+(J.sn++)).set({r:'f',at:now(),tg:me(),sd:Math.floor(Math.random()*1e6)});J.nextF=t+(12-6*clamp(t/JDUR,0,1))*rr(.75,1.25)}else J.nextF=t+2}
   if(t>=J.nextB){J.refs.en.child(me()+'_'+(J.sn++)).set({r:'b',at:now(),tg:me(),sd:Math.floor(Math.random()*1e6)});J.nextB=t+(40-14*clamp(t/JDUR,0,1))*rr(.8,1.2)}}
 // ---- người chơi khác ----
-function onJLive(s){const J=JT;if(!J||!room)return;const v=s.val()||{};for(const n in v){if(n===me()||!room.players[n])continue;const d=v[n];let o=J.oth[n];if(!o){const g=mkJet(V.hue(n),0);g.position.set(d.x,d.y,d.z);J.g.add(g);o=J.oth[n]={g,x:d.x,y:d.y,z:d.z,yaw:d.yw,pit:d.pt,roll:d.rl,a:d.a,f:0,hp:d.hp,spd:d.v,tx:d.x,ty:d.y,tz:d.z,tyaw:d.yw,tpit:d.pt,troll:d.rl,ft:0}}
-  o.tx=d.x;o.ty=d.y;o.tz=d.z;o.tyaw=d.yw;o.tpit=d.pt;o.troll=d.rl;o.hp=d.hp;o.spd=d.v;o.f=d.f;if(o.a&&!d.a){jboom(o.x,o.y,o.z,2);const[vv,p]=jspat(o.x,o.y,o.z);SFX.boomJ(vv,p)}o.a=d.a}
+function onJLive(s){const J=JT;if(!J||!room)return;const v=s.val()||{};for(const n in v){if(n===me()||!room.players[n])continue;const d=v[n];let o=J.oth[n];if(!o){const g=mkJet(jetCol(n),0);g.position.set(d.x,d.y,d.z);J.g.add(g);o=J.oth[n]={g,x:d.x,y:d.y,z:d.z,yaw:d.yw,pit:d.pt,roll:d.rl,a:d.a,f:0,hp:d.hp,spd:d.v,tx:d.x,ty:d.y,tz:d.z,tyaw:d.yw,tpit:d.pt,troll:d.rl,ft:0}}
+  o.tx=d.x;o.ty=d.y;o.tz=d.z;o.tyaw=d.yw;o.tpit=d.pt;o.troll=d.rl;o.hp=d.hp;o.spd=d.v;o.f=d.f;o.b=d.b;if(o.a&&!d.a){jboom(o.x,o.y,o.z,2);const[vv,p]=jspat(o.x,o.y,o.z);SFX.boomJ(vv,p)}o.a=d.a}
   for(const n in J.oth)if(!v[n]){J.g.remove(J.oth[n].g);delete J.oth[n]}}
 // ---- phòng không của tàu sân bay & tàu khu trục ----
 function flakFx(c){pt({x:c[0],y:c[1],z:c[2],life:.2,s0:8,s1:26,a:1,add:1,c:0xffd9a0});pt({x:c[0],y:c[1],z:c[2],life:1.8,s0:8,s1:24,a:.65,dr:.4,c:0x1f1f24});for(let i=0;i<5;i++)pt({x:c[0],y:c[1],z:c[2],vx:rr(-30,30),vy:rr(-30,30),vz:rr(-30,30),dr:1.2,life:.4,s0:2.2,s1:.4,a:1,add:1,c:0xffb15a})}
@@ -3918,7 +3954,9 @@ function shipHP(s){const J=JT;if(s.id==='car')return carHP();let o=0;const dd=(r
 function carHP(){const J=JT;return J.hpMax-(othersOf(room&&room.cdmg)+J.cdLocal)}
 function islHP(){const J=JT;return ISLHP-(othersOf(room&&room.idmg)+J.idLocal)}
 function claimOutcome(r,why){const J=JT;if(J.oc)return;J.oc=1;roomRef.child('outcome').transaction(c=>c?undefined:{r,why:why||'',at:now()})}
-function jetRules(t){const J=JT;if(J.over)return;const ch=carHP(),ih=islHP(),ds=J.ships.filter(s=>s.id!=='car');
+function jetRules(t){const J=JT;if(J.over)return;
+  if(J.pvp){if(t>=JDUR)claimOutcome('end','time');if(room&&room.outcome){J.out=room.outcome;J.over=true;J.outAt=t;SFX.end()}return}
+  const ch=carHP(),ih=islHP(),ds=J.ships.filter(s=>s.id!=='car');
   if(ch<=0&&J.sink===null){J.sink=t;SFX.horn(.9)}
   const fleetDown=J.sink!==null&&ds.every(s=>s.sunk!=null);
   if(fleetDown){const lt=Math.max(J.sink,...ds.map(s=>s.sunk));if(t>lt+6)claimOutcome('win')}
@@ -3929,6 +3967,11 @@ function shipSink(s,dt,t){const J=JT,u=t-s.sunk;s.g.rotation.z=Math.min(.55,u*.1
   if(Math.random()<dt*10){const p=shipWorld(s,rr(-3,3),9,rr(-26,26));pt({x:p[0],y:p[1],z:p[2],vy:rr(5,12),dr:.4,g:-1,life:2.2,s0:8,s1:24,a:.65,c:0x25252b})}if(u>9)s.g.visible=false}
 function carSink(dt,t){const J=JT,u=t-J.sink,c=J.car;c.rotation.z=Math.min(.45,u*.075);c.rotation.x=Math.min(.12,u*.02);c.position.y=-Math.min(22,u*u*.7);J.csm=(J.csm||0)-dt;if(J.csm<=0&&u<7.5){J.csm=.32;const p=carW(rr(-6,6),14,rr(-60,60)),K=rr(1.3,2.4);jboom(p[0],p[1]+3,p[2],K);const[v,pn]=jspat(p[0],p[1],p[2]);SFX.boomJ(v,pn)}
   if(Math.random()<dt*14){const p=carW(rr(-8,8),16,rr(-60,60));pt({x:p[0],y:p[1],z:p[2],vy:rr(8,16),dr:.4,g:-1,life:2.6,s0:12,s1:34,a:.7,c:0x25252b})}}
+
+function pvpTable(r,useLocal){const names=r.order||Object.keys(r.players||{}),teams=r.teams||{},kd=Object.assign({},r.kd||{});if(useLocal&&JT)kd[me()]={d:JT.deaths,k:JT.byK};
+  const k={},dd={};names.forEach(n=>{k[n]=0;dd[n]=0});for(const v in kd){const e=kd[v]||{};dd[v]=e.d||0;for(const w in (e.k||{}))k[w]=(k[w]||0)+e.k[w]}
+  const rows=names.map(n=>({n,team:teams[n]||'A',k:k[n]||0,d:dd[n]||0})).sort((a,b)=>b.k-a.k||a.d-b.d||(a.n<b.n?-1:1)),tk={A:0,B:0};rows.forEach(x=>tk[x.team]+=x.k);return{rows,tk}}
+function pvpKillsOf(n){const kd=(room&&room.kd)||{};let s=0;for(const v in kd){if(v===me())continue;s+=((kd[v].k||{})[n])||0}if(n===me())s+=0;return s}
 function jprojFn(x,y,z,w,h){const J=JT,c=J.cam;if(!c)return null;const px=JX+x-c.px,py=y-c.py,pz=z-c.pz,d=px*c.fx+py*c.fy+pz*c.fz;if(d<3)return null;const dr=px*c.rx+pz*c.rz,du=px*c.ux+py*c.uy+pz*c.uz,th=Math.tan(V.cam.fov*Math.PI/360),as=w/h;return[w/2+dr/d/(th*as)*(w/2),h/2-du/d/th*(h/2),d]}
 function standingsJ(){const J=JT,r=room,names=r.order||Object.keys(r.players),k={};for(const id in (r.res||{})){const w=r.res[id].w;k[w]=(k[w]||0)+1}
   return names.map(n=>{const cd=n===me()?J.cdLocal:((r.cdmg||{})[n]||0);return{n,k:k[n]||0,c:Math.round(cd/J.hpMax*100),d:n===me()?J.deaths:((r.deaths||{})[n]||0)}}).sort((a,b)=>b.k-a.k||b.c-a.c)}
@@ -3940,12 +3983,13 @@ function jhud(nw,t){const J=JT,m=J.me,cv=J.cv,x=J.cx;if(!cv||!x)return;const dp=
   x.setTransform(dp,0,0,dp,0,0);const w=innerWidth,h=innerHeight;x.clearRect(0,0,w,h);x.textBaseline='middle';
   const txt=(s,px,py,sz,col,al)=>{x.font='800 '+sz+'px "DM Sans",Arial,sans-serif';x.textAlign=al||'left';x.lineWidth=3;x.strokeStyle='rgba(0,0,0,.65)';x.strokeText(s,px,py);x.fillStyle=col||'#fff';x.fillText(s,px,py)};
   const bar=(bx,by,bw,bh,f,col)=>{x.fillStyle='rgba(0,0,0,.55)';x.fillRect(bx,by,bw,bh);x.fillStyle=col;x.fillRect(bx+2,by+2,Math.max(0,(bw-4)*clamp(f,0,1)),bh-4);x.strokeStyle='rgba(255,255,255,.8)';x.lineWidth=1.5;x.strokeRect(bx,by,bw,bh)};
-  const ch=Math.max(0,carHP()),cf=ch/J.hpMax,ih=clamp(islHP(),0,ISLHP);
+  if(J.pvp)pvpTop(txt,w,t);else{const ch=Math.max(0,carHP()),cf=ch/J.hpMax,ih=clamp(islHP(),0,ISLHP);
   txt('🚢 Tàu sân bay địch · '+Math.ceil(cf*100)+'%',w/2,16,15,'#fecaca','center');bar(w/2-170,28,340,14,cf,'#ef4444');txt('🏝️ Đảo · '+Math.ceil(ih/ISLHP*100)+'%',w/2,56,13,'#bbf7d0','center');bar(w/2-120,66,240,10,ih/ISLHP,'#22c55e');txt('⚓ Khu trục địch còn '+J.ships.filter(s=>s.id!=='car'&&s.sunk==null).length+'/3',w/2,92,13,'#fdba74','center');
   if(J.aaD<700)txt('🛡 Trong tầm phòng không địch!',w/2,108,13,'#fecaca','center');const st=standingsJ(),mine=st.find(s=>s.n===me())||{k:0,c:0,d:0};txt('⏱ '+(t<0?'Chuẩn bị…':fmt(Math.max(0,JDUR-t))),12,64,17);txt('✈️ Hạ '+mine.k+'   💥 '+mine.c+'%   💀 '+mine.d,12,86,14);
-  st.forEach((s,i)=>txt((s.n===me()?'▶ ':'')+s.n+' · ✈'+s.k+' 💥'+s.c+'%',w-12,64+i*18,12,s.n===me()?'#fde68a':'#e5e7eb','right'));
+  st.forEach((s,i)=>txt((s.n===me()?'▶ ':'')+s.n+' · ✈'+s.k+' 💥'+s.c+'%',w-12,64+i*18,12,s.n===me()?'#fde68a':'#e5e7eb','right'))}
   // đồng hồ dưới
-  bar(w/2-110,h-52,220,12,m.hp/100,m.hp>50?'#22c55e':m.hp>25?'#f59e0b':'#ef4444');txt('Độ bền '+Math.max(0,m.hp)+'%  ·  '+Math.round(m.spd*3.6)+' km/h  ·  ⬆ '+Math.round(m.y)+' m',w/2,h-68,13,'#fff','center');
+  if(J.pvp){txt('⚡',w/2+128,h-46,13,'#fdba74','center');bar(w/2+140,h-52,80,12,m.boostE/100,'#fb923c');txt('🔄',w/2+128,h-28,13,'#d8b4fe','center');bar(w/2+140,h-33,80,8,1-m.rollCd/3.5,'#a855f7')}
+  bar(w/2-110,h-52,220,12,m.hp/100,m.hp>50?'#22c55e':m.hp>25?'#f59e0b':'#ef4444');txt('Độ bền '+Math.max(0,Math.round(m.hp))+'%  ·  '+Math.round(m.spd*3.6)+' km/h  ·  ⬆ '+Math.round(m.y)+' m',w/2,h-68,13,'#fff','center');
   txt('🚀 '+'●'.repeat(m.mis)+'○'.repeat(4-m.mis)+'    🎇 '+'●'.repeat(m.fl)+'○'.repeat(8-m.fl),w/2,h-30,15,'#fde68a','center');bar(w/2-60,h-18,120,6,m.heat,m.ovh>0?'#ef4444':'#f97316');
   // tâm bắn & tâm chuột
   if(m.st==='a'){const f=fwd(m.yaw,m.pit),n=jprojFn(m.x+f[0]*600,m.y+f[1]*600,m.z+f[2]*600,w,h);if(n){x.strokeStyle='rgba(255,255,255,.9)';x.lineWidth=2;x.beginPath();x.arc(n[0],n[1],11,0,6.3);x.moveTo(n[0]-18,n[1]);x.lineTo(n[0]-7,n[1]);x.moveTo(n[0]+7,n[1]);x.lineTo(n[0]+18,n[1]);x.stroke();x.fillStyle='#ef4444';x.fillRect(n[0]-1.5,n[1]-1.5,3,3)}
@@ -3954,22 +3998,23 @@ function jhud(nw,t){const J=JT,m=J.me,cv=J.cv,x=J.cx;if(!cv||!x)return;const dp=
   if(m.lock){const l=jprojFn(m.lock.x,m.lock.y,m.lock.z,w,h);if(l){const s=26+Math.sin(nw*10)*3;x.strokeStyle='#ef4444';x.lineWidth=3;x.strokeRect(l[0]-s,l[1]-s,s*2,s*2);txt('KHÓA '+Math.round(m.lock.d)+' m',l[0],l[1]+s+14,12,'#fecaca','center')}}
   // dấu hiệu địch / tàu sân bay / người chơi khác
   for(const id in J.en){const e=J.en[id];if(e.st!=='air')continue;const p=jprojFn(e.x,e.y,e.z,w,h);if(p){x.fillStyle='#ef4444';x.beginPath();x.moveTo(p[0],p[1]-14);x.lineTo(p[0]-7,p[1]-26);x.lineTo(p[0]+7,p[1]-26);x.closePath();x.fill();txt(Math.round(p[2])+'m',p[0],p[1]-36,11,'#fecaca','center')}}
-  if(J.sink===null){const c=carW(0,20,0),p=jprojFn(c[0],c[1],c[2],w,h);if(p){txt('🚢 '+Math.round(p[2])+' m',p[0],p[1]-20,13,'#fde68a','center')}else{const dx=c[0]-m.x,dz=c[2]-m.z,a=dx*(-Math.cos(m.yaw))+dz*Math.sin(m.yaw),b=dx*Math.sin(m.yaw)+dz*Math.cos(m.yaw),br=Math.atan2(a,b);txt('🚢 '+Math.round(Math.hypot(dx,dz))+' m',w/2+Math.sin(br)*w*.36,h/2-Math.cos(br)*h*.3,13,'#fde68a','center')}}
+  if(!J.pvp&&J.sink===null){const c=carW(0,20,0),p=jprojFn(c[0],c[1],c[2],w,h);if(p){txt('🚢 '+Math.round(p[2])+' m',p[0],p[1]-20,13,'#fde68a','center')}else{const dx=c[0]-m.x,dz=c[2]-m.z,a=dx*(-Math.cos(m.yaw))+dz*Math.sin(m.yaw),b=dx*Math.sin(m.yaw)+dz*Math.cos(m.yaw),br=Math.atan2(a,b);txt('🚢 '+Math.round(Math.hypot(dx,dz))+' m',w/2+Math.sin(br)*w*.36,h/2-Math.cos(br)*h*.3,13,'#fde68a','center')}}
   J.ships.forEach(s=>{if(s.id==='car'||s.sunk!=null)return;const p=jprojFn(s.x,24,s.z,w,h);if(p&&p[2]<1600)txt('⚓ '+Math.max(0,Math.round(shipHP(s)/DHP*100))+'% · '+Math.round(p[2])+'m',p[0],p[1]-14,12,'#fdba74','center')});
-  for(const n in J.oth){const o=J.oth[n];if(!o.a)continue;const p=jprojFn(o.x,o.y,o.z,w,h);if(p)txt('✈ '+n,p[0],p[1]-18,12,'#7dd3fc','center')}
+  for(const n in J.oth){const o=J.oth[n];if(!o.a)continue;const p=jprojFn(o.x,o.y,o.z,w,h);if(p)txt('✈ '+n+(J.pvp?' · '+Math.round(p[2])+'m':''),p[0],p[1]-18,12,J.pvp&&!sameTeam(n)?'#fca5a5':(G==='team'?'#86efac':'#7dd3fc'),'center')}
   // radar
-  const rc=[86,h-120],R=70,sc=R/1900;x.fillStyle='rgba(2,30,50,.55)';x.beginPath();x.arc(rc[0],rc[1],R,0,6.3);x.fill();x.strokeStyle='rgba(125,211,252,.7)';x.lineWidth=1.5;x.stroke();x.beginPath();x.arc(rc[0],rc[1],R/2,0,6.3);x.stroke();
-  const blip=(wx,wz,col,s)=>{const dx=wx-m.x,dz=wz-m.z;let a=dx*(-Math.cos(m.yaw))+dz*Math.sin(m.yaw),b=dx*Math.sin(m.yaw)+dz*Math.cos(m.yaw);const d=Math.hypot(a,b);if(d>1900){a*=1900/d;b*=1900/d}x.fillStyle=col;x.fillRect(rc[0]+a*sc-s/2,rc[1]-b*sc-s/2,s,s)};
-  blip(0,0,'#22c55e',7);if(J.sink===null)blip(CAR.x,CAR.z,'#facc15',8);J.ships.forEach(s=>{if(s.id!=='car'&&s.sunk==null)blip(s.x,s.z,'#fb923c',5)});for(const id in J.en){const e=J.en[id];if(e.st==='air')blip(e.x,e.z,'#ef4444',e.role==='b'?6:4)}for(const n in J.oth){const o=J.oth[n];if(o.a)blip(o.x,o.z,'#38bdf8',5)}
+  const RR=J.pvp?1300:1900,rc=[86,h-120],R=70,sc=R/RR;x.fillStyle='rgba(2,30,50,.55)';x.beginPath();x.arc(rc[0],rc[1],R,0,6.3);x.fill();x.strokeStyle='rgba(125,211,252,.7)';x.lineWidth=1.5;x.stroke();x.beginPath();x.arc(rc[0],rc[1],R/2,0,6.3);x.stroke();
+  const blip=(wx,wz,col,s)=>{const dx=wx-m.x,dz=wz-m.z;let a=dx*(-Math.cos(m.yaw))+dz*Math.sin(m.yaw),b=dx*Math.sin(m.yaw)+dz*Math.cos(m.yaw);const d=Math.hypot(a,b);if(d>RR){a*=RR/d;b*=RR/d}x.fillStyle=col;x.fillRect(rc[0]+a*sc-s/2,rc[1]-b*sc-s/2,s,s)};
+  blip(0,0,'#22c55e',7);if(!J.pvp&&J.sink===null)blip(CAR.x,CAR.z,'#facc15',8);J.ships.forEach(s=>{if(s.id!=='car'&&s.sunk==null)blip(s.x,s.z,'#fb923c',5)});for(const id in J.en){const e=J.en[id];if(e.st==='air')blip(e.x,e.z,'#ef4444',e.role==='b'?6:4)}for(const n in J.oth){const o=J.oth[n];if(o.a)blip(o.x,o.z,J.pvp&&!sameTeam(n)?'#ef4444':'#38bdf8',5)}
   x.fillStyle='#fff';x.beginPath();x.moveTo(rc[0],rc[1]-7);x.lineTo(rc[0]-5,rc[1]+5);x.lineTo(rc[0]+5,rc[1]+5);x.closePath();x.fill();
   // cảnh báo & thông báo
   let a='',b='';
-  if(J.over){a=J.out&&J.out.r==='win'?'🏆 CHIẾN THẮNG!':'💥 THẤT BẠI';b=J.out&&J.out.r==='win'?'Toàn bộ hạm đội địch đã chìm!':J.out&&J.out.why==='island'?'Đảo đã bị phá hủy':'Hết giờ'}
-  else if(t<0){a=t>-3?String(Math.ceil(-t)):'';b='Đánh chìm tàu sân bay VÀ cả 3 tàu khu trục địch để thắng · bảo vệ hòn đảo!'}else if(t<1.2)a='CẤT CÁNH!';
+  if(J.over&&J.pvp){const s=pvpSummary();a=s.title;b=s.sub}
+  else if(J.over){a=J.out&&J.out.r==='win'?'🏆 CHIẾN THẮNG!':'💥 THẤT BẠI';b=J.out&&J.out.r==='win'?'Toàn bộ hạm đội địch đã chìm!':J.out&&J.out.why==='island'?'Đảo đã bị phá hủy':'Hết giờ'}
+  else if(t<0){a=t>-3?String(Math.ceil(-t)):'';b=J.pvp?(G==='team'?'Hạ đối thủ đội bạn · không bắn nhầm đồng đội!':'Hạ nhiều đối thủ nhất trong 8 phút!'):'Đánh chìm tàu sân bay VÀ cả 3 tàu khu trục địch để thắng · bảo vệ hòn đảo!'}else if(t<1.2)a='CẤT CÁNH!';
   else if(m.st==='d'){a='💥';b='Máy bay bị bắn hạ! Hồi sinh sau '+Math.max(1,Math.ceil(m.dieAt/1000+RESP-now()/1000))+' giây'}
   else if(J.warnD<1400){const fl=Math.floor(nw*5)%2===0;b='';if(fl){x.fillStyle='rgba(220,38,38,.28)';x.fillRect(0,0,w,h)}txt('⚠ TÊN LỬA ĐANG LAO TỚI! Thả pháo sáng (F / C / nút 🎇)',w/2,h*.3,19,fl?'#fecaca':'#fff','center')}
   else if(m.oob){txt('⚠ Quay lại khu vực chiến đấu!',w/2,h*.3,19,'#fde68a','center')}
-  else if(J.msgT>0){b=J.msg}else if(J.noteT>0){b='+1 ✈️ Hạ máy bay địch!'}
+  else if(J.msgT>0){b=J.msg}else if(J.noteT>0){b=J.pvp&&J.noteMsg?J.noteMsg:'+1 ✈️ Hạ máy bay địch!'}
   if(a)txt(a,w/2,h*.2,46,'#fff','center');if(b)txt(b,w/2,h*.2+(a?44:0),17,'#fff','center');
   const fine=window.matchMedia&&window.matchMedia('(pointer: fine)').matches;if(fine&&!document.pointerLockElement&&!J.over)txt('🖱️ Nhấp chuột vào màn hình để khóa chuột và lái bằng chuột (Esc: nhả chuột)',w/2,h-92,12,'#e0f2fe','center')}
 function jetTick(dt,nw){const J=JT,r=room;if(!J||!r)return;const t=J.t=(now()-r.startAt)/1000,m=J.me,lock=panelOpen(),cam=V.cam;
@@ -3979,25 +4024,28 @@ function jetTick(dt,nw){const J=JT,r=room;if(!J||!r)return;const t=J.t=(now()-r.
   jetFlight(dt,canAct);jetWeapons(dt,nw,t,canAct);jetSpawns(t);aaStep(t);
   for(const id in J.en)enemyStep(J.en[id],dt,nw);for(let i=J.ms.length-1;i>=0;i--)msStep(J.ms[i],i,dt,nw);for(let i=J.fls.length-1;i>=0;i--)flareStep(J.fls[i],i,dt);
   for(let i=J.tm.length-1;i>=0;i--)if(t>=J.tm[i].t){const f=J.tm[i].f;J.tm.splice(i,1);f()}
-  for(const n in J.oth){const o=J.oth[n],k=Math.min(1,dt*8);o.x+=(o.tx-o.x)*k;o.y+=(o.ty-o.y)*k;o.z+=(o.tz-o.z)*k;o.yaw+=wrap(o.tyaw-o.yaw)*k;o.pit+=(o.tpit-o.pit)*k;o.roll+=(o.troll-o.roll)*k;o.g.position.set(o.x,o.y,o.z);o.g.rotation.set(-o.pit,o.yaw,o.roll);o.g.visible=!!o.a;o.g.userData.glow.scale.setScalar(2.8+Math.random()*.8);
+  for(const n in J.oth){const o=J.oth[n],k=Math.min(1,dt*8);o.x+=(o.tx-o.x)*k;o.y+=(o.ty-o.y)*k;o.z+=(o.tz-o.z)*k;o.yaw+=wrap(o.tyaw-o.yaw)*k;o.pit+=(o.tpit-o.pit)*k;o.roll+=(o.troll-o.roll)*k;o.g.position.set(o.x,o.y,o.z);o.g.rotation.set(-o.pit,o.yaw,o.roll);o.g.visible=!!o.a;o.g.userData.glow.scale.setScalar(2.8+(o.b?3:0)+Math.random()*.8);
     if(o.f&&o.a){o.ft-=dt;if(o.ft<=0){o.ft=.083;const f=fwd(o.yaw,o.pit);pt({x:o.x+f[0]*8,y:o.y+f[1]*8,z:o.z+f[2]*8,vx:f[0]*900,vy:f[1]*900,vz:f[2]*900,life:.5,s0:2,s1:1.2,a:1,add:1,c:0xffe08a});if(Math.random()<.4){const[v,p]=jspat(o.x,o.y,o.z);SFX.gun(v*.5,p)}}}}
-  if(m.g){m.g.position.set(m.x,m.y,m.z);m.g.rotation.set(-m.pit,m.yaw,m.roll);m.g.userData.glow.scale.setScalar(2.4+m.thr*2+Math.random()*.6);m.g.visible=m.st==='a'&&(m.inv<=0||Math.floor(nw*10)%2===0)}
+  pvpCannon(dt);
+  if(m.g){m.g.position.set(m.x,m.y,m.z);m.g.rotation.set(-m.pit,m.yaw,m.roll+m.rollAdd);m.g.userData.glow.scale.setScalar(2.4+m.thr*2+(m.boosting?3:0)+Math.random()*.6);if(m.boosting&&m.st==='a'&&Math.random()<dt*45){const f=fwd(m.yaw,m.pit);pt({x:m.x-f[0]*8,y:m.y-f[1]*8,z:m.z-f[2]*8,life:.5,s0:3,s1:6,a:.8,add:1,c:0xff9a3c})}m.g.visible=m.st==='a'&&(m.inv<=0||Math.floor(nw*10)%2===0)}
   J.wt.offset.x+=dt*.002;J.wt.offset.y+=dt*.0012;J.crad.rotation.y+=dt*1.5;J.irad.rotation.y+=dt*1.8;if(J.sink===null){J.car.position.y=Math.sin(nw*.8)*.4;J.car.rotation.z=Math.sin(nw*.6)*.015}else carSink(dt,t);
   J.ships.forEach(s=>{if(s.id==='car'){s.rad.rotation.y+=dt*2;return}if(s.sunk==null&&shipHP(s)<=0){s.sunk=t;const p=shipWorld(s,0,10,0);jboom(p[0],p[1]+4,p[2],2.2);const[v,pn]=jspat(p[0],p[1],p[2]);SFX.boomJ(v,pn);J.msg='⚓ Một tàu khu trục địch đã bị đánh chìm!';J.msgT=3}
     if(s.sunk!=null)shipSink(s,dt,t);else{s.g.position.y=Math.sin(nw*.9+s.ph)*.35;s.g.rotation.z=Math.sin(nw*.7+s.ph)*.02;s.rad.rotation.y+=dt*2}});
   {let ad=1e9;if(m.st==='a')for(const b of J.aa){if(shipDead(b.ship))continue;const W=shipWorld(b.ship,b.p[0],b.p[1],b.p[2]),d=Math.hypot(m.x-W[0],m.y-W[1],m.z-W[2]);if(d<ad)ad=d}J.aaD=ad}
-  const dI=100*(1-clamp(islHP()/ISLHP,0,1));if(dI>8){J.smk-=dt;if(J.smk<=0){J.smk=Math.max(.12,.6-dI*.006);const P=[[-40,25,-30],[30,40,-26],[0,16,18],[55,22,-12],[-10,16,40]],q=P[Math.floor(Math.random()*Math.min(P.length,1+Math.floor(dI/18)))];pt({x:q[0],y:q[1],z:q[2],vy:7,dr:.4,g:-.5,life:3,s0:6,s1:22,a:.6,c:0x2e2e33});if(dI>40&&Math.random()<.5)pt({x:q[0],y:q[1]-1,z:q[2],vy:3,life:.6,s0:4,s1:9,a:.9,add:1,c:0xff8a2a})}}
+  const dI=J.pvp?0:100*(1-clamp(islHP()/ISLHP,0,1));if(dI>8){J.smk-=dt;if(J.smk<=0){J.smk=Math.max(.12,.6-dI*.006);const P=[[-40,25,-30],[30,40,-26],[0,16,18],[55,22,-12],[-10,16,40]],q=P[Math.floor(Math.random()*Math.min(P.length,1+Math.floor(dI/18)))];pt({x:q[0],y:q[1],z:q[2],vy:7,dr:.4,g:-.5,life:3,s0:6,s1:22,a:.6,c:0x2e2e33});if(dI>40&&Math.random()<.5)pt({x:q[0],y:q[1]-1,z:q[2],vy:3,life:.6,s0:4,s1:9,a:.9,add:1,c:0xff8a2a})}}
   ptStep(dt);
   // camera đuổi theo máy bay
   let cx,cy,cz,tx,ty,tz;if(m.st==='a'){const f=fwd(m.yaw,m.pit);cx=m.x-f[0]*30;cy=m.y-f[1]*30+9;cz=m.z-f[2]*30;tx=m.x+f[0]*40;ty=m.y+f[1]*40;tz=m.z+f[2]*40}else{const a=nw*.5;cx=m.x+Math.cos(a)*90;cy=m.y+40;cz=m.z+Math.sin(a)*90;tx=m.x;ty=m.y;tz=m.z}
   cy=Math.max(cy,3);const k=Math.min(1,dt*(m.st==='a'?9:2));cam.position.x+=(JX+cx-cam.position.x)*k;cam.position.y+=(cy-cam.position.y)*k;cam.position.z+=(cz-cam.position.z)*k;
   if(J.shake>.01){cam.position.x+=(Math.random()-.5)*J.shake*3;cam.position.y+=(Math.random()-.5)*J.shake*2;J.shake*=Math.pow(.02,dt)}else J.shake=0;
+  {const tf=68+(m.boosting?10:0);if(Math.abs(cam.fov-tf)>.3){cam.fov+=(tf-cam.fov)*Math.min(1,dt*6);cam.updateProjectionMatrix()}}
   cam.lookAt(JX+tx,ty,tz);V.hero.position.set(JX+m.x,m.y,m.z);
   {const px=cam.position.x,py=cam.position.y,pz=cam.position.z;let fx=JX+tx-px,fy=ty-py,fz=tz-pz;const fl=Math.hypot(fx,fy,fz)||1;fx/=fl;fy/=fl;fz/=fl;let rx=-fz,rz=fx;const rl=Math.hypot(rx,rz)||1;rx/=rl;rz/=rl;J.cam={px,py,pz,fx,fy,fz,rx,rz,ux:-rz*fy,uy:rz*fx-rx*fz,uz:rx*fy}}
   // cảnh báo tên lửa
-  let wd=1e9;if(m.st==='a')for(const ms of J.ms)if(ms.k==='e'&&ms.tg===me()&&!ms.decoy){const d=Math.hypot(ms.x-m.x,ms.y-m.y,ms.z-m.z);if(d<wd)wd=d}J.warnD=wd;if(wd<1400){J.wb=(J.wb||0)-dt;if(J.wb<=0){J.wb=.18+.8*(wd/1400);SFX.warn()}}
+  let wd=1e9;if(m.st==='a')for(const ms of J.ms)if(((ms.k==='e'&&ms.tg===me())||(ms.k==='p'&&ms.tid===me()&&ms.by!==me()&&!sameTeam(ms.by)))&&!ms.decoy){const d=Math.hypot(ms.x-m.x,ms.y-m.y,ms.z-m.z);if(d<wd)wd=d}J.warnD=wd;if(wd<1400){J.wb=(J.wb||0)-dt;if(J.wb<=0){J.wb=.18+.8*(wd/1400);SFX.warn()}}
   // mạng
-  if(nw-J.sent>.1){J.sent=nw;J.refs.lv.child(me()).set({x:R1(m.x),y:R1(m.y),z:R1(m.z),yw:R2(m.yaw),pt:R2(m.pit),rl:R2(m.roll),a:m.st==='a'?1:0,hp:m.hp,v:Math.round(m.spd),f:m.fire?1:0})}
+  if(nw-J.sent>.1){J.sent=nw;J.refs.lv.child(me()).set({x:R1(m.x),y:R1(m.y),z:R1(m.z),yw:R2(m.yaw),pt:R2(m.pit),rl:R2(m.roll+m.rollAdd),a:m.st==='a'?1:0,hp:Math.round(m.hp),v:Math.round(m.spd),f:m.fire?1:0,b:m.boosting?1:0})}
+  if(J.pvp){const mk=pvpKillsOf(me());if(mk>J.lastK){J.lastK=mk;J.noteT=1.6;J.noteMsg='+1 💥 Bạn đã bắn hạ một đối thủ!';SFX.hit()}}
   if(nw-J.wp>.5){J.wp=nw;if(J.cdLocal!==J.cdSent){J.cdSent=J.cdLocal;roomRef.child('cdmg/'+me()).set(J.cdLocal)}if(J.idLocal!==J.idSent){J.idSent=J.idLocal;roomRef.child('idmg/'+me()).set(J.idLocal)}const ds=JSON.stringify(J.dLocal);if(ds!==J.dSent){J.dSent=ds;roomRef.child('ddmg/'+me()).set(Object.assign({},J.dLocal))}}
   engSet(m.st==='a'?m.thr:0);
   J.hu-=dt;if(J.hu<=0){J.hu=.033;try{jhud(nw,t)}catch(e){}}
@@ -4007,8 +4055,24 @@ function finishJet(){const J=JT;if(!J||J.shown)return;J.shown=1;if(document.poin
 function endJet(back){const J=JT;if(!J)return;JT=null;engOff();try{J.refs.en.off();J.refs.em.off();J.refs.pm.off();J.refs.fl.off();J.refs.lv.off();J.refs.rs.off();J.refs.lv.child(me()).remove();J.refs.pm.child(me()).remove();J.refs.fl.child(me()).remove()}catch(_){}
   ptClear();V.scene.remove(J.g);J.g.traverse(o=>{if(o.geometry)o.geometry.dispose()});J.disp.forEach(d=>d.dispose&&d.dispose());
   const h=V.hero;h.visible=true;h.rotation.set(0,0,0);h.rotation.order='YXZ';V.camS.fp=0;V.scene.fog.near=90;V.scene.fog.far=330;V.cam.fov=55;V.cam.near=.3;V.cam.far=600;V.cam.updateProjectionMatrix();
-  jIn.mg=jIn.mm=jIn.bg=jIn.bm=jIn.bf=0;const c=$('jt-cv');if(c&&c.getContext)c.getContext('2d').clearRect(0,0,c.width,c.height);
+  jIn.mg=jIn.mm=jIn.bg=jIn.bm=jIn.bf=jIn.br=jIn.bb=0;{const a=$('ju-rol'),b=$('ju-bst');if(a)a.style.display='none';if(b)b.style.display='none'}const c=$('jt-cv');if(c&&c.getContext)c.getContext('2d').clearRect(0,0,c.width,c.height);
   if(back&&loc==='sky')toGR(false,'j');else if(loc==='sky')loc='gr'}
+
+function pvpCannon(dt){const J=JT,m=J.me;if(!J.pvp||m.st!=='a'||J.over||m.rollT>0)return;
+  for(const n in J.oth){const o=J.oth[n];if(!o.a||!o.f||sameTeam(n))continue;const f=fwd(o.yaw,o.pit),ox=o.x+f[0]*8,oy=o.y+f[1]*8,oz=o.z+f[2]*8,rx=m.x-ox,ry=m.y-oy,rz=m.z-oz,al=rx*f[0]+ry*f[1]+rz*f[2];if(al<5||al>700)continue;
+    if(Math.hypot(rx-f[0]*al,ry-f[1]*al,rz-f[2]*al)<12){damageMe(22*dt,n);if(Math.random()<dt*10)sparkAt(m.x,m.y,m.z)}}}
+function pvpTop(txt,w,t){const J=JT,tb=pvpTable(room,true),rem=Math.max(0,JDUR-Math.max(0,t)),tm=t<0?'Chuẩn bị…':fmt(rem);
+  if(G==='team'){txt('🔵 '+tb.tk.A+'   ⏱ '+tm+'   '+tb.tk.B+' 🔴',w/2,18,19,'#fff','center');const my=J.teams[me()]||'A';txt('Bạn thuộc '+TEAMN[my],w/2,42,13,TEAMC[my],'center')}
+  else{txt('⏱ '+tm,w/2,18,19,'#fff','center');const l=tb.rows[0];if(l)txt('🏆 Dẫn đầu: '+l.n+' · '+l.k,w/2,42,13,'#fde68a','center')}
+  const mine=tb.rows.find(s=>s.n===me())||{k:0,d:0};txt('💥 Hạ '+mine.k+'   💀 '+mine.d,12,64,15);
+  tb.rows.forEach((s,i)=>txt((s.n===me()?'▶ ':'')+s.n+' · '+s.k+'/'+s.d,w-12,64+i*18,12,G==='team'?TEAMC[s.team]:(s.n===me()?'#fde68a':'#e5e7eb'),'right'))}
+function pvpWinners(tb){if(G==='team'){const a=tb.tk.A,b=tb.tk.B;return a===b?null:(a>b?'A':'B')}const top=tb.rows[0];if(!top||top.k===0)return null;return tb.rows.filter(x=>x.k===top.k&&x.d===top.d).map(x=>x.n)}
+function pvpSummary(){const tb=pvpTable(room,true);if(G==='team'){const a=tb.tk.A,b=tb.tk.B,my=JT.teams[me()]||'A',w=pvpWinners(tb);if(!w)return{title:'🤝 HÒA!',sub:'Tỉ số '+a+' – '+b};return{title:w===my?'🏆 CHIẾN THẮNG!':'💥 THẤT BẠI',sub:TEAMN[w]+' thắng '+Math.max(a,b)+' – '+Math.min(a,b)}}
+  const w=pvpWinners(tb);if(!w)return{title:'🤝 KHÔNG AI GHI ĐIỂM',sub:'Hết giờ'};return{title:w.includes(me())?'🏆 BẠN THẮNG!':'💥 '+w.join(', ')+' thắng',sub:'Hết giờ'}}
+function pvpResultBlock(r){const tb=pvpTable(r,false),w=pvpWinners(tb);let head;
+  if(G==='team'){const a=tb.tk.A,b=tb.tk.B;head=`<div class=hur><span>${!w?'🤝 HÒA':'🏆 '+TEAMN[w]+' thắng'}</span><b>${a} – ${b}</b></div>`}
+  else head=`<div class=hur><span>🏆 Người chiến thắng</span><b>${w?w.map(esc).join(', ')+' · '+tb.rows[0].k+' lần hạ':'Không ai ghi điểm'}</b></div>`;
+  return head+'<div class=hut>Bảng xếp hạng</div>'+tb.rows.map((s,i)=>`<div class=hur><span>${i+1}. ${s.n===me()?'<b>'+esc(s.n)+'</b>':esc(s.n)}${G==='team'?' <span style="color:'+TEAMC[s.team]+'">●</span>':''}</span><span>💥 ${s.k} · 💀 ${s.d}</span></div>`).join('')}
 function tick(dt,nw){if(loc==='gr')grTick(dt,nw);else if(loc==='arena'&&AR)arenaTick(dt,nw);else if(loc==='sky'&&JT)jetTick(dt,nw)}
 function abort(){if(!loc)return;if(AR)endMatch(false);if(JT)endJet(false);leaveGR()}
 window.HUNT={enter,interact,tick,abort,fps:()=>(loc==='arena'&&!!AR)||(loc==='sky'&&!!JT)};
